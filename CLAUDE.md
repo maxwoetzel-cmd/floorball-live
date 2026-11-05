@@ -1,0 +1,49 @@
+# Floorball Live — Projektkontext für Claude Code
+
+## Was ist das?
+"Floorball Live" ist eine eigenständige Web-App zur Live-Erfassung und Analyse
+der Spiele der USV-Jena-Floorball-Herren. Sie läuft komplett offline im Browser —
+kein Server, kein Build-Schritt, keine externen Abhängigkeiten.
+
+## Wichtigste Projektregel
+Die App MUSS eine einzige, in sich geschlossene HTML-Datei bleiben
+(HTML + CSS + JavaScript inline in `floorball_live_app_7.html`).
+Grund: Sie wird als lokale Datei direkt im Browser geöffnet (bzw. am Handy zum
+Startbildschirm hinzugefügt) und muss ohne Internet funktionieren.
+Also: keine externen Skripte/Stylesheets, keine npm-Pakete, keine CDN-Links,
+kein Framework. Neue Funktionen immer inline ergänzen.
+
+## Technik
+- Reines HTML/CSS/Vanilla-JavaScript, eine Datei.
+- Dunkles, mobil-optimiertes UI; Farben über CSS-Variablen in `:root`
+  (`--wir`, `--gegner`, …).
+- Spielstand/Status wird im Browser via `localStorage` gespeichert
+  (Funktionen `save()` / `load()`), überlebt also einen Reload.
+  Achtung: localStorage hängt am Browser/Gerät — zum Sichern/Übertragen den
+  JSON-Export der App nutzen.
+
+## Funktionsumfang (Stand Version 7)
+- Schuss-Erfassung über ein Spielfeld mit antippbaren Zonen
+  (`renderField`, `onZoneClick`, `confirmShot`), getrennt nach "wir"/Gegner.
+- Bullys (`addBully`), Special Situations / Über-/Unterzahl (`addSpecial`).
+- Kaderverwaltung: Spieler anlegen/bearbeiten, Nummern, Positionen,
+  Anwesenheit; Massen-Import (`loadBulkRoster`, `addPlayer`, `togglePresent`).
+- Aufstellung: Reihen/Slots per Klick und Drag&Drop (`renderLineup`, `slotDrop`),
+  Eiszeiten (`computePlayerMinutes`) und Plus-Minus (`computePlusMinus`).
+- Torwart-Statistik (`renderGoalieStats`).
+- Statistik-Ansichten (`renderStats`, `renderPlaytimes`).
+- Export: CSV (Schüsse, Specials, Kader) und vollständiger JSON-Export/Import
+  (`exportData`, `importData`) zum Sichern/Übertragen zwischen Geräten.
+- Neues Spiel zurücksetzen (`newGame`).
+
+## Entwicklung
+- Testen: Datei im Browser öffnen (Doppelklick). Kein Build nötig.
+- Änderungen committen; größere Features in eigenem Commit, damit die Historie
+  nachvollziehbar bleibt.
+- Oberflächensprache: Deutsch. Code-Kommentare gern Deutsch.
+- Dateiname aktuell `floorball_live_app_7.html` (die "7" ist eine gewachsene
+  Versionsnummer; nicht mehr bei jeder Änderung hochzählen — dafür gibt es
+  jetzt Git).
+
+## Kontext
+USV Jena e.V., Abteilung Floorball. Verantwortlich: Max Woetzel (Head-Coach Herren).

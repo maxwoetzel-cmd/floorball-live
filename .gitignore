@@ -1,0 +1,11 @@
+# Betriebssystem-Dateien
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor
+.vscode/
+.idea/
+
+# Abhängigkeiten (falls je welche hinzukommen)
+node_modules/
