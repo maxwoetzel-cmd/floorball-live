@@ -849,6 +849,10 @@ function downloadRosterCsv(){
   sortedRoster().forEach(function(p){rows.push([p.nr, p.name, p.isCaptain?'ja':'', p.isGoalie?'ja':'', p.pos||'', p.present?'ja':'nein', Math.round(computePlayerMinutes(p)), pm[p.id]||0]);});
   downloadCsv('floorball_spielzeiten.csv',rows);
 }
+function hasGameData(){
+  return state.shots.length>0 || state.specials.length>0 || state.bullies.length>0 ||
+    state.roster.some(function(p){return p.events&&p.events.length>0;});
+}
 function exportData(){
   var payload={version:6, exportedAt:new Date().toISOString(), state:state};
   var stamp=new Date().toISOString().slice(0,16).replace(/[:T]/g,'-');
@@ -863,6 +867,10 @@ function importData(evt){
     try{
       var payload=JSON.parse(e.target.result), imported=payload.state||payload;
       if(!imported||!Array.isArray(imported.shots)){showToast('Datei nicht lesbar'); return;}
+      if(hasGameData()){
+        if(!confirm('Der aktuelle Spielstand wird durch die Datei ersetzt. Er wird vorher automatisch als Datei gesichert. Fortfahren?')) return;
+        exportData();
+      }
       state=Object.assign({teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1}, imported);
       state.pendingZone=null;
       if(!Array.isArray(state.specials)) state.specials=[];
@@ -891,14 +899,16 @@ function syncControlsFromState(){
 }
 function newGame(btn){
   if(btn.dataset.confirm==='1'){
+    var backedUp=hasGameData();
+    if(backedUp) exportData(); // alten Stand vor dem Löschen automatisch sichern
     var keepRoster=state.roster.map(function(p){return {id:p.id, nr:p.nr, name:p.name, isCaptain:!!p.isCaptain, isGoalie:!!p.isGoalie, pos:p.pos||'', present:false, onField:false, events:[]};});
     state={teamUs:state.teamUs, teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, shots:[], specials:[], bullies:[], roster:keepRoster, lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:state.nextPlayerId};
     selectedSlot=null;
     save(); btn.dataset.confirm='0'; btn.textContent='Neues Spiel'; btn.classList.remove('danger-confirm');
     document.getElementById('current-minute').value=0; syncControlsFromState(); renderAll();
-    showToast('Neues Spiel – Kader bleibt erhalten');
+    showToast(backedUp ? 'Neues Spiel – alter Stand wurde als Datei gesichert, Kader bleibt' : 'Neues Spiel – Kader bleibt erhalten');
   } else {
-    btn.dataset.confirm='1'; btn.textContent='Wirklich? Spieldaten werden gelöscht'; btn.classList.add('danger-confirm');
+    btn.dataset.confirm='1'; btn.textContent='Wirklich? Stand wird vorher gesichert, dann gelöscht'; btn.classList.add('danger-confirm');
     setTimeout(function(){if(btn.dataset.confirm==='1'){btn.dataset.confirm='0'; btn.textContent='Neues Spiel'; btn.classList.remove('danger-confirm');}},3500);
   }
 }
