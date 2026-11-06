@@ -292,11 +292,15 @@ function sortedRoster(){
 var teamColor={Wir:'#378add', Gegner:'#d85a30'};
 
 function setPeriod(btn){
+  if(btn.dataset.period===state.period) return;
+  // Offene Einsatzzeiten im alten Drittel abschliessen, sonst gehen Minuten verloren
+  var closed=closeOpenIntervals();
   document.querySelectorAll('#period-seg button').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active'); state.period=btn.dataset.period;
   document.getElementById('current-minute').value=0;
   updateMinuteCaption();
-  save(); renderBullies(); renderPlaytimes();
+  save(); renderBullies(); renderRosterAll();
+  if(closed) showToast(closed+' Spieler raus – Drittelbeginn drücken, um die Aufstellung wieder einzusetzen');
 }
 function updateMinuteCaption(){
   var el=document.getElementById('minute-caption');
@@ -660,10 +664,15 @@ function clearSlot(){
   setSlotValue(selectedSlot,null);
   save(); closeSlotPanel(); renderPlaytimes();
 }
-function pauseAll(){
+function closeOpenIntervals(){
   var endMinute = state.period==='Verlängerung' ? curMinute() : 20;
   var count=0;
   state.roster.forEach(function(p){if(p.onField){p.events.push({period:state.period, minute:endMinute, action:'aus'}); p.onField=false; count++;}});
+  return count;
+}
+function pauseAll(){
+  var endMinute = state.period==='Verlängerung' ? curMinute() : 20;
+  var count=closeOpenIntervals();
   save(); renderRosterAll(); showToast(count+' Spieler raus – '+state.period+' mit Min '+endMinute+' abgeschlossen');
 }
 function resumeAll(){
