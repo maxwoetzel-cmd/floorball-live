@@ -32,10 +32,19 @@ und speichert in Drive. Es läuft im Konto von Max, Zugriff nur für USV-Jena-Ko
 4. Auf dem Android-Tablet in Chrome öffnen und **Zum Startbildschirm hinzufügen**.
 
 ## Aktualisieren
-Die App liest immer die neueste `floorball_live_app_7.html` aus dem Drive-Ordner "Floorball Live".
-Ein neuer Stand der App ist also nur eine neue Datei im Ordner. Das Backend selbst
-(`Code.gs`) ändert sich selten. Dann: **Bereitstellen > Bereitstellungen verwalten >
-Bearbeiten > Neue Version**, damit die URL gleich bleibt.
+Die Web-App lädt die App aus GitHub (`main`, Datei `floorball_live_app_7.html`). Ein neuer Stand
+der App ist also nur ein Push. Er ist nach spätestens ca. 10 Minuten da (5 Minuten Zwischenspeicher
+im Backend plus der von GitHub). Fällt GitHub aus, nimmt das Backend die neueste gleichnamige Datei
+aus dem Drive-Ordner "Floorball Live" (Rückfall).
+
+Das Backend selbst (`Code.gs`) ändert sich selten. Dann den neuen Code einfügen, speichern und
+**Bereitstellen > Bereitstellungen verwalten > Bearbeiten (Stift) > Version: Neue Version > Bereitstellen**.
+Nicht "Neue Bereitstellung" wählen, das erzeugt eine neue Adresse.
+
+**Sicherheit:** Wer das GitHub-Repository ändern kann, bestimmt den Code, der in der Web-App läuft
+(auch auf die Funktionen `saveFile`, `readFile`, `getGames`, `getRoster`). Das GitHub-Konto sollte
+deshalb mit Zwei-Faktor-Anmeldung geschützt sein. Der Saisonmanager-Schlüssel ist aus der App heraus
+nicht lesbar.
 
 ## Bekannte Grenzen (nicht getestet)
 - Die App braucht beim Laden Internet. Ohne Netz startet sie nicht.

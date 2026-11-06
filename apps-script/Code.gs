@@ -19,21 +19,21 @@ var CONFIG = {
   LEAGUE_ID: 2502,                                   // Herren Verbandsliga Ost
   TEAM_ID: 9942,                                     // USV Jena (Team-ID im Saisonmanager, Saison 2026/27)
   APP_FOLDER_ID: '1QIm4VSOxaDvUDGHy8uF1gxaM1xoPKtNU',  // Drive-Ordner "Floorball Live"
-  APP_FILE_NAME: 'floorball_live_app_7.html',
+  APP_FILE_NAME: 'floorball_live_app_7.html',          // Rückfall: Datei im Drive-Ordner
+  APP_URL: 'https://raw.githubusercontent.com/maxwoetzel-cmd/floorball-live/main/floorball_live_app_7.html',
   EXPORT_FOLDER_ID: '1j7o0gGj_ks2m65UQ3Dyh2_F-nJyAoI3d', // Drive-Ordner "Exporte"
   MAX_CHARS: 5 * 1024 * 1024
 };
 
-/** Liefert die App aus: nimmt die neueste Datei mit dem App-Namen im App-Ordner. */
+/**
+ * Liefert die App aus. Quelle: GitHub (Branch main, öffentliches Repository).
+ * Ein Update der App ist also nur ein Push, Änderungen sind nach spätestens ca. 10 Minuten da
+ * (5 Minuten Zwischenspeicher hier, dazu der von GitHub). Fällt GitHub aus oder liefert
+ * Unsinn, kommt die neueste Datei aus dem Drive-Ordner "Floorball Live".
+ * ACHTUNG: Wer das Repository ändern kann, bestimmt den Code der App. GitHub-Konto mit 2FA schützen.
+ */
 function doGet() {
-  var it = DriveApp.getFolderById(CONFIG.APP_FOLDER_ID).getFilesByName(CONFIG.APP_FILE_NAME);
-  var newest = null;
-  while (it.hasNext()) {
-    var f = it.next();
-    if (!newest || f.getLastUpdated() > newest.getLastUpdated()) newest = f;
-  }
-  if (!newest) return HtmlService.createHtmlOutput('App-Datei nicht gefunden: ' + CONFIG.APP_FILE_NAME);
-  return HtmlService.createHtmlOutput(newest.getBlob().getDataAsString('UTF-8'))
+  return HtmlService.createHtmlOutput(loadAppHtml_())
     .setTitle('Floorball Live')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
 }
@@ -131,6 +131,34 @@ function readFile(name) {
 }
 
 /* ---------- privat ---------- */
+
+function loadAppHtml_() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get('app_html');
+  if (cached) return cached;
+  try {
+    var res = UrlFetchApp.fetch(CONFIG.APP_URL, { muteHttpExceptions: true });
+    if (res.getResponseCode() === 200) {
+      var text = res.getContentText('UTF-8');
+      // Plausibilitätsprüfung: vollständige Seite und unsere App
+      if (text.indexOf('<title>Floorball Live</title>') !== -1 && text.indexOf('</html>') !== -1) {
+        try { cache.put('app_html', text, 300); } catch (e) { /* zu groß für den Zwischenspeicher: egal */ }
+        return text;
+      }
+    }
+  } catch (e) { /* Rückfall unten */ }
+  return driveAppHtml_();
+}
+
+function driveAppHtml_() {
+  var it = DriveApp.getFolderById(CONFIG.APP_FOLDER_ID).getFilesByName(CONFIG.APP_FILE_NAME);
+  var newest = null;
+  while (it.hasNext()) {
+    var f = it.next();
+    if (!newest || f.getLastUpdated() > newest.getLastUpdated()) newest = f;
+  }
+  return newest ? newest.getBlob().getDataAsString('UTF-8') : 'App nicht erreichbar (GitHub und Drive-Rückfall fehlgeschlagen).';
+}
 
 function apiGet_(path) {
   var key = PropertiesService.getScriptProperties().getProperty('SAISONMANAGER_KEY');

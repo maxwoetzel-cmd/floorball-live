@@ -37,7 +37,11 @@ kein Framework. Neue Funktionen immer inline ergänzen.
   Web-App-Modus der App (erkennbar an `inWebApp()`): Spielplan laden und Spiel wählen
   (`loadGames`, `pickGame`), Spielstand-Autosave nach Drive (`scheduleDriveSave`),
   Exporte direkt nach Drive (`saveFile`). Als lokale Datei sind diese Teile inaktiv.
-  Kader-Import aus dem Saisonmanager: noch offen (Endpunkt unbekannt).
+  Kader-Import aus dem Saisonmanager (`loadSmRoster`, `applySmRoster`): Backend `getRoster` liest die
+  Aufstellungen der letzten 6 beendeten Spiele (`/api/v2/games/:id`, Feld `players`).
+  Die Web-App lädt die App-Datei aus GitHub (`main`, raw), Rückfall: Drive-Ordner. Ein App-Update ist
+  daher nur ein Push (nach ca. 10 Min. sichtbar). Backend-Änderungen: neue Version der bestehenden
+  Bereitstellung (nicht "Neue Bereitstellung", sonst ändert sich die Adresse). GitHub-Konto mit 2FA schützen.
 - Auf iOS laufen Export und CSV über das Teilen-Menü (`saveFile`), weil der
   normale Download dort unzuverlässig ist. Auf Android/Laptop normaler Download.
 - Vor "Neues Spiel" und "Importieren" wird der alte Stand automatisch gesichert;
