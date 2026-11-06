@@ -22,6 +22,18 @@ kein Framework. Neue Funktionen immer inline ergänzen.
   Achtung: localStorage hängt am Browser/Gerät — zum Sichern/Übertragen den
   JSON-Export der App nutzen.
 
+## Geräte und Verteilung
+- Ziel-Geräte: Android-Tablet (Hauptgerät am Spieltag) und Smartphones;
+  iPad/iPhone nur gelegentlich. Verteilung als lokale Datei über den
+  Drive-Ordner "Floorball Live" (USV-Workspace). Kein Hosting, kein Service Worker
+  (bewusst klein gehalten; GitHub Pages wurde geprüft und vorerst verworfen).
+- Auf iOS laufen Export und CSV über das Teilen-Menü (`saveFile`), weil der
+  normale Download dort unzuverlässig ist. Auf Android/Laptop normaler Download.
+- Vor "Neues Spiel" und "Importieren" wird der alte Stand automatisch gesichert;
+  bricht die Sicherung ab, bleibt alles unverändert.
+- Nach jedem Spiel JSON-Export in den Drive-Unterordner "Exporte" legen.
+  Der Browserspeicher (`localStorage`) ist keine Sicherung.
+
 ## Funktionsumfang (Stand Version 7)
 - Schuss-Erfassung über ein Spielfeld mit antippbaren Zonen
   (`renderField`, `onZoneClick`, `confirmShot`), getrennt nach "wir"/Gegner.
