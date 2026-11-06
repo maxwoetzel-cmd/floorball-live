@@ -24,9 +24,16 @@ kein Framework. Neue Funktionen immer inline ergänzen.
 
 ## Geräte und Verteilung
 - Ziel-Geräte: Android-Tablet (Hauptgerät am Spieltag) und Smartphones;
-  iPad/iPhone nur gelegentlich. Verteilung als lokale Datei über den
-  Drive-Ordner "Floorball Live" (USV-Workspace). Kein Hosting, kein Service Worker
-  (bewusst klein gehalten; GitHub Pages wurde geprüft und vorerst verworfen).
+  iPad/iPhone nur gelegentlich. Verteilung bisher als lokale Datei über den
+  Drive-Ordner "Floorball Live" (USV-Workspace). GitHub Pages / Service Worker
+  wurden geprüft und verworfen (Seite wäre öffentlich).
+- In Arbeit ("Weg A"): Workspace-interne Web-App über Google Apps Script
+  (Ordner `apps-script/`, Anleitung dort). Sie liefert dieselbe HTML-Datei aus,
+  hält den Saisonmanager-API-Schlüssel geheim (Skripteigenschaft, NIE im Code/Repo)
+  und speichert nach Drive ("Exporte"). Die App-Datei selbst bleibt EINE HTML-Datei;
+  `apps-script/` ist nur Backend. Der Saisonmanager (`saisonmanager.de/api/v2`) sendet
+  keine CORS-Header und braucht einen Schlüssel, daher kein direkter Abruf aus dem
+  Browser. Liga Herren VL Ost = ID 2502. Offline ist in diesem Weg nicht möglich.
 - Auf iOS laufen Export und CSV über das Teilen-Menü (`saveFile`), weil der
   normale Download dort unzuverlässig ist. Auf Android/Laptop normaler Download.
 - Vor "Neues Spiel" und "Importieren" wird der alte Stand automatisch gesichert;
