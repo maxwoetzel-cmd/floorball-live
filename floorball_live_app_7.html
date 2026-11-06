@@ -573,7 +573,9 @@ function updatePlayerField(id,field,value){
   if(field==='isCaptain'||field==='isGoalie') value=!!value;
   p[field]=value;
   if(field==='isGoalie'&&value) p.pos='';
-  save(); renderRosterAll();
+  save();
+  // Bei Texteingabe (Nr/Name) die Bearbeitungsliste nicht neu zeichnen, sonst verliert das Feld den Fokus
+  renderRosterAll(field==='nr'||field==='name');
 }
 function togglePresent(id){
   var p=playerById(id); if(!p)return;
@@ -780,13 +782,13 @@ function renderPlaytimes(){
     return '<div class="roster-row" style="grid-template-columns:40px 1fr 64px 48px 40px;"><span>'+(p.nr||'')+'</span><span>'+(p.name||'')+(p.isCaptain?' (K)':'')+(p.isGoalie?' (T)':'')+'</span><span class="muted" style="font-size:12px;">'+status+'</span><span style="font-variant-numeric:tabular-nums;">'+Math.round(mins)+"'</span><span style='font-variant-numeric:tabular-nums;'>"+pmStr+'</span></div>';
   }).join('');
 }
-function renderRosterAll(){
+function renderRosterAll(skipEdit){
   var editEl=document.getElementById('roster-edit');
   if(!state.roster.length){
     editEl.innerHTML='<p class="muted" style="padding:8px 0;">Noch kein Kader eingetragen.</p>';
     document.getElementById('present-chips').innerHTML='<p class="muted">Erst Kader eintragen.</p>';
   } else {
-    editEl.innerHTML='<div class="roster-row" style="border-top:none;"><span class="muted">Nr</span><span class="muted">Name</span><span class="muted">K</span><span class="muted">T</span><span class="muted">Pos</span><span></span></div>'+
+    if(skipEdit!==true) editEl.innerHTML='<div class="roster-row" style="border-top:none;"><span class="muted">Nr</span><span class="muted">Name</span><span class="muted">K</span><span class="muted">T</span><span class="muted">Pos</span><span></span></div>'+
       sortedRoster().map(function(p){
         return '<div class="roster-row">'+
           '<input type="text" value="'+(p.nr||'')+'" oninput="updatePlayerField('+p.id+',\'nr\',this.value)">'+
