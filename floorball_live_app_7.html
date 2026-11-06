@@ -826,11 +826,32 @@ function renderRosterAll(skipEdit){
 }
 
 function csvEscape(v){return '"'+String(v).replace(/"/g,'""')+'"';}
-function downloadCsv(filename,rows){triggerDownload(new Blob(['\ufeff'+rows.map(function(r){return r.map(csvEscape).join(',');}).join('\n')],{type:'text/csv;charset=utf-8;'}),filename);}
+function downloadCsv(filename,rows){saveFile(new Blob(['\ufeff'+rows.map(function(r){return r.map(csvEscape).join(',');}).join('\n')],{type:'text/csv;charset=utf-8;'}),filename);}
 function triggerDownload(blob,filename){
   var url=URL.createObjectURL(blob), a=document.createElement('a');
   a.href=url; a.download=filename; document.body.appendChild(a); a.click(); document.body.removeChild(a);
   setTimeout(function(){URL.revokeObjectURL(url);},1000);
+}
+// iPhone/iPad: Der normale Download funktioniert dort unzuverl\u00e4ssig (v.a. im Startbildschirm-Modus).
+// Deshalb dort das Teilen-Men\u00fc nutzen ("In Dateien sichern", AirDrop, Mail ...). Sonst normaler Download.
+function isIOS(){
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+}
+// Gibt ein Promise zur\u00fcck: true = gesichert/\u00fcbergeben, false = vom Nutzer abgebrochen.
+function saveFile(blob,filename){
+  try{
+    if(isIOS() && window.File && navigator.canShare){
+      var f=new File([blob],filename,{type:blob.type||'application/octet-stream'});
+      if(navigator.canShare({files:[f]})){
+        return navigator.share({files:[f], title:filename}).then(function(){return true;}).catch(function(err){
+          if(err&&err.name==='AbortError') return false;
+          triggerDownload(blob,filename); return true;
+        });
+      }
+    }
+  }catch(e){}
+  triggerDownload(blob,filename);
+  return Promise.resolve(true);
 }
 function downloadShotsCsv(){
   var rows=[['Spiel','Drittel','Team','Ansicht','Zone','Ergebnis']];
@@ -857,8 +878,10 @@ function exportData(){
   var payload={version:6, exportedAt:new Date().toISOString(), state:state};
   var stamp=new Date().toISOString().slice(0,16).replace(/[:T]/g,'-');
   var opp=(state.teamOpp||'gegner').replace(/[^a-zA-Z0-9]/g,'_');
-  triggerDownload(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),'floorball_'+opp+'_'+stamp+'.json');
-  showToast('Spielstand exportiert');
+  return saveFile(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),'floorball_'+opp+'_'+stamp+'.json').then(function(ok){
+    showToast(ok ? 'Spielstand exportiert' : 'Export abgebrochen');
+    return ok;
+  });
 }
 function importData(evt){
   var file=evt.target.files[0]; if(!file)return;
@@ -868,9 +891,19 @@ function importData(evt){
       var payload=JSON.parse(e.target.result), imported=payload.state||payload;
       if(!imported||!Array.isArray(imported.shots)){showToast('Datei nicht lesbar'); return;}
       if(hasGameData()){
-        if(!confirm('Der aktuelle Spielstand wird durch die Datei ersetzt. Er wird vorher automatisch als Datei gesichert. Fortfahren?')) return;
-        exportData();
+        if(!confirm('Der aktuelle Spielstand wird durch die Datei ersetzt. Er wird vorher gesichert. Fortfahren?')) return;
+        exportData().then(function(ok){
+          if(ok) applyImported(imported); else showToast('Import abgebrochen – nichts geändert');
+        });
+        return;
       }
+      applyImported(imported);
+    }catch(err){showToast('Datei nicht lesbar');}
+  };
+  reader.readAsText(file); evt.target.value='';
+}
+function applyImported(imported){
+    try{
       state=Object.assign({teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1}, imported);
       state.pendingZone=null;
       if(!Array.isArray(state.specials)) state.specials=[];
@@ -883,8 +916,6 @@ function importData(evt){
       });
       save(); syncControlsFromState(); renderAll(); showToast('Spielstand importiert');
     }catch(err){showToast('Datei nicht lesbar');}
-  };
-  reader.readAsText(file); evt.target.value='';
 }
 function syncControlsFromState(){
   document.getElementById('team-us').value=state.teamUs||'';
@@ -900,13 +931,17 @@ function syncControlsFromState(){
 function newGame(btn){
   if(btn.dataset.confirm==='1'){
     var backedUp=hasGameData();
-    if(backedUp) exportData(); // alten Stand vor dem Löschen automatisch sichern
-    var keepRoster=state.roster.map(function(p){return {id:p.id, nr:p.nr, name:p.name, isCaptain:!!p.isCaptain, isGoalie:!!p.isGoalie, pos:p.pos||'', present:false, onField:false, events:[]};});
-    state={teamUs:state.teamUs, teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, shots:[], specials:[], bullies:[], roster:keepRoster, lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:state.nextPlayerId};
-    selectedSlot=null;
-    save(); btn.dataset.confirm='0'; btn.textContent='Neues Spiel'; btn.classList.remove('danger-confirm');
-    document.getElementById('current-minute').value=0; syncControlsFromState(); renderAll();
-    showToast(backedUp ? 'Neues Spiel – alter Stand wurde als Datei gesichert, Kader bleibt' : 'Neues Spiel – Kader bleibt erhalten');
+    btn.dataset.confirm='0'; btn.textContent='Neues Spiel'; btn.classList.remove('danger-confirm');
+    // alten Stand vor dem Löschen sichern; bei abgebrochener Sicherung bleibt alles unverändert
+    (backedUp ? exportData() : Promise.resolve(true)).then(function(ok){
+      if(!ok){showToast('Abgebrochen – Stand nicht gesichert, nichts gelöscht'); return;}
+      var keepRoster=state.roster.map(function(p){return {id:p.id, nr:p.nr, name:p.name, isCaptain:!!p.isCaptain, isGoalie:!!p.isGoalie, pos:p.pos||'', present:false, onField:false, events:[]};});
+      state={teamUs:state.teamUs, teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, shots:[], specials:[], bullies:[], roster:keepRoster, lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:state.nextPlayerId};
+      selectedSlot=null;
+      save();
+      document.getElementById('current-minute').value=0; syncControlsFromState(); renderAll();
+      showToast(backedUp ? 'Neues Spiel – alter Stand wurde gesichert, Kader bleibt' : 'Neues Spiel – Kader bleibt erhalten');
+    });
   } else {
     btn.dataset.confirm='1'; btn.textContent='Wirklich? Stand wird vorher gesichert, dann gelöscht'; btn.classList.add('danger-confirm');
     setTimeout(function(){if(btn.dataset.confirm==='1'){btn.dataset.confirm='0'; btn.textContent='Neues Spiel'; btn.classList.remove('danger-confirm');}},3500);
@@ -915,6 +950,8 @@ function newGame(btn){
 function renderAll(){renderField(); renderStats(); renderSpecials(); renderBullies(); renderRosterAll();}
 
 load();
+// Browser bitten, den Speicher nicht automatisch zu räumen (hilft v.a. auf iPad/iPhone)
+try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persist(); }catch(e){}
 syncControlsFromState();
 updateMinuteCaption();
 renderAll();
