@@ -573,7 +573,10 @@ function showRosterEdit(show){
   document.getElementById('roster-edit').style.display=show?'block':'none';
   document.getElementById('roster-edit-toggle').textContent=show?'Bearbeiten schließen':'Kader bearbeiten';
 }
-function removePlayer(id){removeFromLineup(id); state.roster=state.roster.filter(function(p){return p.id!==id;}); save(); renderRosterAll();}
+function removePlayer(id){
+  var pl=playerById(id); if(!pl) return;
+  if(!confirm('Spieler "'+playerLabel(pl)+'" wirklich löschen? Spielzeit und Plus/Minus dieses Spielers gehen verloren.')) return;
+  removeFromLineup(id); state.roster=state.roster.filter(function(p){return p.id!==id;}); save(); renderRosterAll();}
 function updatePlayerField(id,field,value){
   var p=playerById(id); if(!p)return;
   if(field==='isCaptain'||field==='isGoalie') value=!!value;
