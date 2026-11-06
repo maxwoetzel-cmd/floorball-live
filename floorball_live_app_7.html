@@ -128,6 +128,8 @@
   <p class="muted" id="sm-current" style="margin:0 0 8px;"></p>
   <button type="button" onclick="loadGames()" style="width:100%;">Spielplan laden</button>
   <div id="sm-list" style="margin-top:10px;"></div>
+  <button type="button" onclick="loadSmRoster()" style="width:100%; margin-top:8px;">Kader aus den letzten Spielen laden</button>
+  <div id="sm-roster"></div>
 </section>
 
 <section>
@@ -877,6 +879,40 @@ function pickGame(id){
   save(); renderStats(); renderGameInfo(); renderGames();
   showToast('Spiel gewählt: '+g.opponent);
 }
+// Kader aus dem Saisonmanager: Namen als Nachname, bei doppeltem Nachnamen mit Initial
+var smRoster=[];
+function smNames(list){
+  var cnt={}; list.forEach(function(p){cnt[p.last]=(cnt[p.last]||0)+1;});
+  var names=list.map(function(p){return cnt[p.last]>1?((p.first||'').charAt(0)+'. '+p.last):p.last;});
+  var cnt2={}; names.forEach(function(n){cnt2[n]=(cnt2[n]||0)+1;});
+  // gleiche Initiale und gleicher Nachname: ersten Vornamen ausschreiben
+  return list.map(function(p,i){return {p:p, name:cnt2[names[i]]>1?((p.first||'').split(' ')[0]+' '+p.last):names[i]};});
+}
+function loadSmRoster(){
+  var el=document.getElementById('sm-roster');
+  el.innerHTML='<p class="muted" style="margin:8px 0;">Lade Kader …</p>';
+  gsRun('getRoster').then(function(list){
+    smRoster=list||[];
+    if(!smRoster.length){el.innerHTML='<p class="muted" style="margin:8px 0;">Keine Spieler gefunden (noch keine beendeten Spiele?).</p>'; return;}
+    el.innerHTML='<p class="muted" style="margin:8px 0;">'+smRoster.length+' Spieler aus den letzten Spielen:</p>'+
+      '<div class="chip-grid">'+smNames(smRoster).map(function(o){return '<span class="chip">'+esc((o.p.nr==null?'':o.p.nr+' ')+o.name+(o.p.goalie?' (T)':''))+'</span>';}).join('')+'</div>'+
+      '<button type="button" class="primary" style="width:100%; margin-top:10px;" onclick="applySmRoster()">In den Kader übernehmen</button>';
+  }).catch(function(e){el.innerHTML='<p class="muted" style="margin:8px 0; color:var(--danger);">Kader nicht geladen: '+esc(e.message)+'</p>';});
+}
+// Übernimmt den Saisonmanager-Kader: vorhandene Spieler werden (über ihre Saisonmanager-ID oder gleiche Nr + Name)
+// aktualisiert, neue ergänzt. Es wird niemand gelöscht; K, Position und Anwesenheit bleiben erhalten.
+function applySmRoster(){
+  var added=0, updated=0;
+  smNames(smRoster).forEach(function(o){
+    var p=o.p, nr=String(p.nr==null?'':p.nr);
+    var ex=state.roster.find(function(r){return r.smId===p.id;}) ||
+           state.roster.find(function(r){return !r.smId && String(r.nr)===nr && (r.name||'').toLowerCase()===o.name.toLowerCase();});
+    if(ex){ex.smId=p.id; ex.nr=nr; ex.name=o.name; if(p.goalie){ex.isGoalie=true; ex.pos='';} updated++;}
+    else{state.roster.push({id:state.nextPlayerId++, nr:nr, name:o.name, isCaptain:false, isGoalie:!!p.goalie, pos:'', present:false, onField:false, events:[], smId:p.id}); added++;}
+  });
+  save(); renderRosterAll();
+  showToast(added+' neu, '+updated+' aktualisiert');
+}
 function setDriveStatus(t){var el=document.getElementById('drive-status'); if(el) el.textContent=t;}
 // Spielstand ein paar Sekunden nach der letzten Änderung automatisch nach Drive sichern
 function scheduleDriveSave(){
@@ -1016,7 +1052,7 @@ function newGame(btn){
     // alten Stand vor dem Löschen sichern; bei abgebrochener Sicherung bleibt alles unverändert
     (backedUp ? exportData() : Promise.resolve(true)).then(function(ok){
       if(!ok){showToast('Abgebrochen – Stand nicht gesichert, nichts gelöscht'); return;}
-      var keepRoster=state.roster.map(function(p){return {id:p.id, nr:p.nr, name:p.name, isCaptain:!!p.isCaptain, isGoalie:!!p.isGoalie, pos:p.pos||'', present:false, onField:false, events:[]};});
+      var keepRoster=state.roster.map(function(p){return {id:p.id, nr:p.nr, name:p.name, isCaptain:!!p.isCaptain, isGoalie:!!p.isGoalie, pos:p.pos||'', present:false, onField:false, events:[], smId:p.smId};});
       state={teamUs:state.teamUs, teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, game:null, shots:[], specials:[], bullies:[], roster:keepRoster, lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:state.nextPlayerId};
       selectedSlot=null;
       save();

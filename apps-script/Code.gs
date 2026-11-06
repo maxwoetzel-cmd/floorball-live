@@ -66,6 +66,35 @@ function getGames() {
 }
 
 /**
+ * Kader aus den Aufstellungen der letzten (bis zu 6) beendeten Spiele von USV Jena.
+ * Pro Spieler: Saisonmanager-ID, Trikotnummer (aus dem jüngsten Einsatz), Vor-/Nachname, Torwart.
+ */
+function getRoster() {
+  var data = getSchedule();
+  var games = Array.isArray(data) ? data : ((data && data.games) || []);
+  var mine = games
+    .filter(function (g) { return g.ended && (g.home_team_id === CONFIG.TEAM_ID || g.guest_team_id === CONFIG.TEAM_ID); })
+    .sort(function (a, b) { return (b.date + ' ' + b.time) < (a.date + ' ' + a.time) ? -1 : 1; }) // neueste zuerst
+    .slice(0, 6);
+  var byId = {};
+  mine.forEach(function (g) {
+    var side = g.home_team_id === CONFIG.TEAM_ID ? 'home' : 'guest';
+    var detail = apiGet_('games/' + g.game_id);
+    ((detail.players && detail.players[side]) || []).forEach(function (p) {
+      if (!byId[p.player_id]) {   // erster Treffer = jüngstes Spiel = aktuelle Trikotnummer
+        byId[p.player_id] = {
+          id: p.player_id, nr: p.trikot_number,
+          first: p.player_firstname || '', last: p.player_name || '',
+          goalie: !!p.goalkeeper || p.position === 'Tor', youth: !!p.youth
+        };
+      }
+    });
+  });
+  return Object.keys(byId).map(function (k) { return byId[k]; })
+    .sort(function (a, b) { return (a.nr || 999) - (b.nr || 999); });
+}
+
+/**
  * Schreibt eine Textdatei in den Ordner "Exporte".
  * overwrite=true: gleichnamige Datei wird aktualisiert (z. B. für den laufenden Spielstand).
  */
@@ -132,6 +161,18 @@ function testPfad() {
   var path = PropertiesService.getScriptProperties().getProperty('PROBE_PATH');
   if (!path) throw new Error('Skripteigenschaft PROBE_PATH fehlt.');
   Logger.log(JSON.stringify(apiGet_(path)).slice(0, 3000));
+}
+
+/**
+ * Kader-Suche: Spiel-Detail eines beendeten Spiels (Beispiel-ID 57970). Zeigt die Feldnamen
+ * und die Aufstellungen (players) mit Trikotnummern, soweit der Schlüssel das darf.
+ */
+function testKader() {
+  try {
+    var game = apiGet_('games/57970');
+    Logger.log('Felder: ' + Object.keys(game).join(', '));
+    Logger.log('players => ' + JSON.stringify(game.players).slice(0, 2500));
+  } catch (e) { Logger.log('FEHLER ' + e.message); }
 }
 
 /** Schreibt eine Testdatei in "Exporte" (prüft die Drive-Rechte). */
