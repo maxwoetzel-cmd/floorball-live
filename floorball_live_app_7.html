@@ -94,6 +94,7 @@
 <body>
 
 <h1>Floorball live</h1>
+<div id="drive-status" class="muted" style="margin:-6px 0 8px;"></div>
 
 <section>
   <div class="row" style="margin-bottom:10px;">
@@ -120,6 +121,13 @@
       <button type="button" class="min-btn" onclick="changeMinute(1)" aria-label="Minute hoch">+</button>
     </div>
   </div>
+</section>
+
+<section id="sm-section" style="display:none;">
+  <h2>Spiel aus dem Saisonmanager</h2>
+  <p class="muted" id="sm-current" style="margin:0 0 8px;"></p>
+  <button type="button" onclick="loadGames()" style="width:100%;">Spielplan laden</button>
+  <div id="sm-list" style="margin-top:10px;"></div>
 </section>
 
 <section>
@@ -248,7 +256,7 @@ function emptyLineup(){return {goalie:null, lines:[emptyLine(),emptyLine(),empty
 
 var state={
   teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir',
-  pendingZone:null, minute:0, shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(),
+  pendingZone:null, minute:0, game:null, shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(),
   nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1
 };
 var selectedSlot=null;
@@ -259,7 +267,7 @@ var ZONE_COLS=[{key:'links',x:8,w:141},{key:'mitte',x:149,w:142},{key:'rechts',x
 var ZONE_ROWS_OFF=[{key:'tornah',y:8,h:151},{key:'zentral',y:159,h:152},{key:'fern',y:311,h:151}];
 var ZONE_ROWS_DEF=[{key:'fern',y:8,h:151},{key:'zentral',y:159,h:152},{key:'tornah',y:311,h:151}];
 
-function save(){try{localStorage.setItem(STORAGE_KEY, JSON.stringify(state));}catch(e){}}
+function save(){try{localStorage.setItem(STORAGE_KEY, JSON.stringify(state));}catch(e){} scheduleDriveSave();}
 function load(){
   try{
     var raw=localStorage.getItem(STORAGE_KEY);
@@ -825,6 +833,73 @@ function renderRosterAll(skipEdit){
   renderLineup(); renderSlotPanel(); renderPlaytimes(); renderGoalieStats();
 }
 
+/* ---------- Web-App-Modus (Google Apps Script): Saisonmanager und Drive ----------
+   Diese Funktionen sind nur aktiv, wenn die App über die Workspace-Web-App läuft.
+   Als lokale Datei bleibt alles wie bisher (Abschnitt ist dann ausgeblendet). */
+var smGames=[], driveTimer=null;
+function inWebApp(){return typeof google!=='undefined' && !!google.script && !!google.script.run;}
+function gsRun(fn,args){
+  return new Promise(function(resolve,reject){
+    var r=google.script.run.withSuccessHandler(resolve).withFailureHandler(function(e){reject(new Error(e&&e.message?e.message:String(e)));});
+    r[fn].apply(r,args||[]);
+  });
+}
+function esc(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function fmtDate(iso){var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(iso||''); return m?m[3]+'.'+m[2]+'.'+m[1]:(iso||'');}
+function renderGameInfo(){
+  var el=document.getElementById('sm-current'); if(!el) return;
+  var g=state.game;
+  el.textContent=g?('Gewählt: '+fmtDate(g.date)+' '+(g.time||'')+' · '+(g.isHome?'Heim':'Auswärts')+' gegen '+g.opponent+' · '+(g.arena||'')):'Noch kein Spiel gewählt.';
+}
+function loadGames(){
+  var list=document.getElementById('sm-list');
+  list.innerHTML='<p class="muted">Lade Spielplan …</p>';
+  gsRun('getGames').then(function(games){smGames=games||[]; renderGames();})
+    .catch(function(e){list.innerHTML='<p class="muted" style="color:var(--danger);">Spielplan nicht geladen: '+esc(e.message)+'</p>';});
+}
+function renderGames(){
+  var list=document.getElementById('sm-list');
+  if(!smGames.length){list.innerHTML='<p class="muted">Keine Spiele gefunden.</p>'; return;}
+  function key(g){return (g.date||'')+' '+(g.time||'');}
+  var upcoming=smGames.filter(function(g){return !g.ended;}).sort(function(a,b){return key(a)<key(b)?-1:1;});
+  var done=smGames.filter(function(g){return g.ended;}).sort(function(a,b){return key(a)<key(b)?1:-1;});
+  list.innerHTML=upcoming.concat(done).map(function(g){
+    var sel=state.game&&state.game.id===g.id;
+    return '<button type="button" class="'+(sel?'active':'')+'" style="width:100%; text-align:left; margin-bottom:6px;" onclick="pickGame('+g.id+')">'+
+      esc(fmtDate(g.date)+' '+(g.time||''))+' · '+esc(g.home)+' – '+esc(g.guest)+(g.ended&&g.result?' · '+esc(g.result):'')+'</button>';
+  }).join('');
+}
+function pickGame(id){
+  var g=smGames.find(function(x){return x.id===id;}); if(!g) return;
+  state.game={id:g.id, date:g.date, time:g.time, arena:g.arena, address:g.address, home:g.home, guest:g.guest, isHome:!!g.isHome, opponent:g.opponent};
+  state.teamOpp=g.opponent;
+  document.getElementById('team-opp').value=g.opponent;
+  save(); renderStats(); renderGameInfo(); renderGames();
+  showToast('Spiel gewählt: '+g.opponent);
+}
+function setDriveStatus(t){var el=document.getElementById('drive-status'); if(el) el.textContent=t;}
+// Spielstand ein paar Sekunden nach der letzten Änderung automatisch nach Drive sichern
+function scheduleDriveSave(){
+  if(!inWebApp()) return;
+  clearTimeout(driveTimer);
+  driveTimer=setTimeout(function(){
+    if(!hasGameData() && state.roster.length===0) return; // leeren Stand nie über einen echten schreiben
+    var payload={version:6, exportedAt:new Date().toISOString(), state:state};
+    gsRun('saveFile',['spielstand_aktuell.json', JSON.stringify(payload), true])
+      .then(function(){setDriveStatus('Drive: gesichert '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}));})
+      .catch(function(){setDriveStatus('Drive-Sicherung fehlgeschlagen – bitte exportieren');});
+  },15000);
+}
+// Ist der Browserspeicher leer, aber in Drive liegt ein Stand, wird er zum Laden angeboten
+function offerDriveRestore(){
+  if(!inWebApp()||hasGameData()||state.roster.length>0) return;
+  gsRun('readFile',['spielstand_aktuell.json']).then(function(text){
+    if(!text) return;
+    if(!confirm('In Drive liegt ein gesicherter Spielstand. Jetzt laden?')) return;
+    var payload=JSON.parse(text); applyImported(payload.state||payload);
+  }).catch(function(){});
+}
+
 function csvEscape(v){return '"'+String(v).replace(/"/g,'""')+'"';}
 function downloadCsv(filename,rows){saveFile(new Blob(['\ufeff'+rows.map(function(r){return r.map(csvEscape).join(',');}).join('\n')],{type:'text/csv;charset=utf-8;'}),filename);}
 function triggerDownload(blob,filename){
@@ -839,6 +914,12 @@ function isIOS(){
 }
 // Gibt ein Promise zur\u00fcck: true = gesichert/\u00fcbergeben, false = vom Nutzer abgebrochen.
 function saveFile(blob,filename){
+  if(inWebApp()){
+    // Web-App: direkt in den Drive-Ordner "Exporte" speichern, bei Fehler normaler Download
+    return blob.text().then(function(text){return gsRun('saveFile',[filename,text,false]);})
+      .then(function(){showToast('In Drive gespeichert: '+filename); return true;})
+      .catch(function(){showToast('Drive-Speichern fehlgeschlagen – Datei wird heruntergeladen'); triggerDownload(blob,filename); return true;});
+  }
   try{
     if(isIOS() && window.File && navigator.canShare){
       var f=new File([blob],filename,{type:blob.type||'application/octet-stream'});
@@ -904,7 +985,7 @@ function importData(evt){
 }
 function applyImported(imported){
     try{
-      state=Object.assign({teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1}, imported);
+      state=Object.assign({teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, game:null, shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1}, imported);
       state.pendingZone=null;
       if(!Array.isArray(state.specials)) state.specials=[];
       if(!Array.isArray(state.bullies)) state.bullies=[];
@@ -936,7 +1017,7 @@ function newGame(btn){
     (backedUp ? exportData() : Promise.resolve(true)).then(function(ok){
       if(!ok){showToast('Abgebrochen – Stand nicht gesichert, nichts gelöscht'); return;}
       var keepRoster=state.roster.map(function(p){return {id:p.id, nr:p.nr, name:p.name, isCaptain:!!p.isCaptain, isGoalie:!!p.isGoalie, pos:p.pos||'', present:false, onField:false, events:[]};});
-      state={teamUs:state.teamUs, teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, shots:[], specials:[], bullies:[], roster:keepRoster, lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:state.nextPlayerId};
+      state={teamUs:state.teamUs, teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, game:null, shots:[], specials:[], bullies:[], roster:keepRoster, lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:state.nextPlayerId};
       selectedSlot=null;
       save();
       document.getElementById('current-minute').value=0; syncControlsFromState(); renderAll();
@@ -955,6 +1036,8 @@ try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persis
 syncControlsFromState();
 updateMinuteCaption();
 renderAll();
+if(inWebApp()){document.getElementById('sm-section').style.display='block'; setDriveStatus('Drive: verbunden'); offerDriveRestore();}
+renderGameInfo();
 </script>
 </body>
 </html>

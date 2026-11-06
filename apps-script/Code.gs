@@ -17,6 +17,7 @@
 var CONFIG = {
   API_BASE: 'https://saisonmanager.de/api/v2',
   LEAGUE_ID: 2502,                                   // Herren Verbandsliga Ost
+  TEAM_ID: 9942,                                     // USV Jena (Team-ID im Saisonmanager, Saison 2026/27)
   APP_FOLDER_ID: '1QIm4VSOxaDvUDGHy8uF1gxaM1xoPKtNU',  // Drive-Ordner "Floorball Live"
   APP_FILE_NAME: 'floorball_live_app_7.html',
   EXPORT_FOLDER_ID: '1j7o0gGj_ks2m65UQ3Dyh2_F-nJyAoI3d', // Drive-Ordner "Exporte"
@@ -43,6 +44,28 @@ function getSchedule() {
 }
 
 /**
+ * Nur die Spiele von USV Jena, kompakt (ohne Logos u. a.) für die App.
+ * Feldnamen laut Saisonmanager-Antwort: game_id, date, time, arena_short, home_team_id ...
+ */
+function getGames() {
+  var data = getSchedule();
+  var games = Array.isArray(data) ? data : ((data && data.games) || []);
+  return games
+    .filter(function (g) { return g.home_team_id === CONFIG.TEAM_ID || g.guest_team_id === CONFIG.TEAM_ID; })
+    .map(function (g) {
+      var isHome = g.home_team_id === CONFIG.TEAM_ID;
+      return {
+        id: g.game_id, nr: g.game_number, day: g.game_day,
+        date: g.date, time: g.time,
+        arena: g.arena_short || g.arena_name || '', address: g.arena_address || '',
+        home: g.home_team_name, guest: g.guest_team_name,
+        isHome: isHome, opponent: isHome ? g.guest_team_name : g.home_team_name,
+        started: !!g.started, ended: !!g.ended, result: g.result_string || ''
+      };
+    });
+}
+
+/**
  * Schreibt eine Textdatei in den Ordner "Exporte".
  * overwrite=true: gleichnamige Datei wird aktualisiert (z. B. für den laufenden Spielstand).
  */
@@ -51,6 +74,9 @@ function saveFile(name, content, overwrite) {
   if (!name) throw new Error('Dateiname fehlt.');
   content = String(content || '');
   if (content.length > CONFIG.MAX_CHARS) throw new Error('Datei zu groß.');
+  var isCsv = /\.csv$/i.test(name);
+  // Excel braucht die BOM-Markierung für Umlaute (der Browser entfernt sie beim Übertragen)
+  if (isCsv && content.charAt(0) !== '﻿') content = '﻿' + content;
   var folder = DriveApp.getFolderById(CONFIG.EXPORT_FOLDER_ID);
   if (overwrite) {
     var it = folder.getFilesByName(name);
@@ -60,7 +86,7 @@ function saveFile(name, content, overwrite) {
       return { id: existing.getId(), name: name, updated: true };
     }
   }
-  var file = folder.createFile(name, content, 'application/json');
+  var file = folder.createFile(name, content, isCsv ? 'text/csv' : 'application/json');
   return { id: file.getId(), name: name, updated: false };
 }
 

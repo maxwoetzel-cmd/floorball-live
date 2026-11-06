@@ -33,7 +33,11 @@ kein Framework. Neue Funktionen immer inline ergänzen.
   und speichert nach Drive ("Exporte"). Die App-Datei selbst bleibt EINE HTML-Datei;
   `apps-script/` ist nur Backend. Der Saisonmanager (`saisonmanager.de/api/v2`) sendet
   keine CORS-Header und braucht einen Schlüssel, daher kein direkter Abruf aus dem
-  Browser. Liga Herren VL Ost = ID 2502. Offline ist in diesem Weg nicht möglich.
+  Browser. Liga Herren VL Ost = ID 2502, Team USV Jena = ID 9942. Offline ist in diesem Weg nicht möglich.
+  Web-App-Modus der App (erkennbar an `inWebApp()`): Spielplan laden und Spiel wählen
+  (`loadGames`, `pickGame`), Spielstand-Autosave nach Drive (`scheduleDriveSave`),
+  Exporte direkt nach Drive (`saveFile`). Als lokale Datei sind diese Teile inaktiv.
+  Kader-Import aus dem Saisonmanager: noch offen (Endpunkt unbekannt).
 - Auf iOS laufen Export und CSV über das Teilen-Menü (`saveFile`), weil der
   normale Download dort unzuverlässig ist. Auf Android/Laptop normaler Download.
 - Vor "Neues Spiel" und "Importieren" wird der alte Stand automatisch gesichert;
