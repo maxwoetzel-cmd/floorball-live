@@ -116,7 +116,7 @@
     <span class="minute-caption" id="minute-caption">1. Drittel · Spielminute</span>
     <div class="minute-controls">
       <button type="button" class="min-btn" onclick="changeMinute(-1)" aria-label="Minute runter">−</button>
-      <input type="number" id="current-minute" min="0" max="20" step="1" value="0" inputmode="numeric" onchange="onMinuteInput()" oninput="renderPlaytimes()">
+      <input type="number" id="current-minute" min="0" max="20" step="1" value="0" inputmode="numeric" onchange="onMinuteInput()" oninput="state.minute=curMinute(); save(); renderPlaytimes()">
       <button type="button" class="min-btn" onclick="changeMinute(1)" aria-label="Minute hoch">+</button>
     </div>
   </div>
@@ -248,7 +248,7 @@ function emptyLineup(){return {goalie:null, lines:[emptyLine(),emptyLine(),empty
 
 var state={
   teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir',
-  pendingZone:null, shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(),
+  pendingZone:null, minute:0, shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(),
   nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1
 };
 var selectedSlot=null;
@@ -266,6 +266,8 @@ function load(){
     if(raw){state=Object.assign(state, JSON.parse(raw));}
     if(!state.lineup||!Array.isArray(state.lineup.lines)) state.lineup=emptyLineup();
     if(!Array.isArray(state.bullies)) state.bullies=[];
+    state.pendingZone=null; // halbfertige Schuss-Auswahl nicht über einen Reload mitnehmen
+    state.minute=parseInt(state.minute)||0;
   }catch(e){}
 }
 function showToast(m){var t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},1500);}
@@ -297,7 +299,7 @@ function setPeriod(btn){
   var closed=closeOpenIntervals();
   document.querySelectorAll('#period-seg button').forEach(function(b){b.classList.remove('active');});
   btn.classList.add('active'); state.period=btn.dataset.period;
-  document.getElementById('current-minute').value=0;
+  document.getElementById('current-minute').value=0; state.minute=0;
   updateMinuteCaption();
   save(); renderBullies(); renderRosterAll();
   if(closed) showToast(closed+' Spieler raus – Drittelbeginn drücken, um die Aufstellung wieder einzusetzen');
@@ -316,7 +318,7 @@ function changeMinute(delta){
   var v=(parseInt(input.value)||0)+delta;
   var max = state.period==='Verlängerung'?99:20;
   if(v<0) v=0; if(v>max) v=max;
-  input.value=v;
+  input.value=v; state.minute=v; save();
   updateMinuteCaption();
   renderPlaytimes();
 }
@@ -325,7 +327,7 @@ function onMinuteInput(){
   var v=parseInt(input.value)||0;
   var max = state.period==='Verlängerung'?99:20;
   if(v<0) v=0; if(v>max) v=max;
-  input.value=v;
+  input.value=v; state.minute=v; save();
   updateMinuteCaption();
   renderPlaytimes();
 }
@@ -858,7 +860,7 @@ function importData(evt){
     try{
       var payload=JSON.parse(e.target.result), imported=payload.state||payload;
       if(!imported||!Array.isArray(imported.shots)){showToast('Datei nicht lesbar'); return;}
-      state=Object.assign({teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1}, imported);
+      state=Object.assign({teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1}, imported);
       state.pendingZone=null;
       if(!Array.isArray(state.specials)) state.specials=[];
       if(!Array.isArray(state.bullies)) state.bullies=[];
@@ -881,12 +883,13 @@ function syncControlsFromState(){
     b.classList.remove('active','gegner');
     if(b.dataset.team===state.currentTeam){b.classList.add('active'); if(state.currentTeam==='Gegner')b.classList.add('gegner');}
   });
+  document.getElementById('current-minute').value=state.minute||0;
   updateMinuteCaption();
 }
 function newGame(btn){
   if(btn.dataset.confirm==='1'){
     var keepRoster=state.roster.map(function(p){return {id:p.id, nr:p.nr, name:p.name, isCaptain:!!p.isCaptain, isGoalie:!!p.isGoalie, pos:p.pos||'', present:false, onField:false, events:[]};});
-    state={teamUs:state.teamUs, teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, shots:[], specials:[], bullies:[], roster:keepRoster, lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:state.nextPlayerId};
+    state={teamUs:state.teamUs, teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, shots:[], specials:[], bullies:[], roster:keepRoster, lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:state.nextPlayerId};
     selectedSlot=null;
     save(); btn.dataset.confirm='0'; btn.textContent='Neues Spiel'; btn.classList.remove('danger-confirm');
     document.getElementById('current-minute').value=0; syncControlsFromState(); renderAll();
