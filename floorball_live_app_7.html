@@ -154,6 +154,7 @@
   .fm-next{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:6px; color:#fff; font-size:12px;}
   .fm-next button{min-height:34px; padding:4px 10px; font-size:12px; background:rgba(255,255,255,0.14); color:#fff; border-color:rgba(255,255,255,0.4);}
   .fm-next button.active{background:#fff; color:#14181b; border-color:#fff;}
+  #fm-modal .fm-num{font-size:13px; opacity:0.8;}
 </style>
 </head>
 <body>
@@ -394,17 +395,24 @@ var POS_KEYS=['OL','C','OR','DL','DR'];
 var POS_LABELS={OL:'Offense links', C:'Center', OR:'Offense rechts', DL:'Defense links', DR:'Defense rechts', G:'Goalie'};
 function emptyLine(){return {OL:null,C:null,OR:null,DL:null,DR:null};}
 // Sonderformationen zum Ansagen: Überzahl (5 Feldspieler), Unterzahl 1 und 2 (je 4); Torwart ist immer dabei
-var FM={PP:{title:'Überzahl', n:5, kind:'pp'}, U1:{title:'Unterzahl 1', n:4, kind:'uz'}, U2:{title:'Unterzahl 2', n:4, kind:'uz'}};
+var FM={
+  PP:{title:'Überzahl', n:5, kind:'pp', names:{1:'Schuss links', 2:'Pass links', 3:'Center', 4:'Schuss rechts', 5:'Aufbau Point'}},
+  U1:{title:'Unterzahl 1', n:4, kind:'uz', names:{1:'Rechter Block', 2:'Linker Block', 3:'Center', 4:'Störer'}},
+  U2:{title:'Unterzahl 2', n:4, kind:'uz', names:{1:'Rechter Block', 2:'Linker Block', 3:'Center', 4:'Störer'}},
+  ALT:{title:'Alternative Aufstellung', n:5, kind:'line', names:{1:'Offense links', 2:'Center', 3:'Offense rechts', 4:'Defense links', 5:'Defense rechts'}}
+};
 // Lage der Positionen in Prozent (nach den Skizzen: Überzahl mit Tor oben, Unterzahl mit Tor unten)
-var FM_POS={pp:{1:[16,36],2:[16,88],3:[50,62],4:[84,63],5:[52,90]}, uz:{1:[63,55],2:[37,56],3:[50,38],4:[56,20]}};
-function newFm(){return {PP:{s:{},next:'L1'}, U1:{s:{},next:'L1'}, U2:{s:{},next:'L1'}};}
-function isFm(line){return line==='PP'||line==='U1'||line==='U2';}
+var FM_POS={pp:{1:[16,36],2:[16,88],3:[50,62],4:[84,63],5:[52,90]}, uz:{1:[63,55],2:[37,56],3:[50,38],4:[56,20]}, line:{1:[18,24],2:[50,24],3:[82,24],4:[32,70],5:[68,70]}};
+function newFm(){return {PP:{s:{},next:'L1'}, U1:{s:{},next:'L1'}, U2:{s:{},next:'L1'}, ALT:{s:{},next:''}};}
+function isFm(line){return line==='PP'||line==='U1'||line==='U2'||line==='ALT';}
 function emptyLineup(){return {goalie:null, extra:null, lines:[emptyLine(),emptyLine(),emptyLine()], fm:newFm()};}
 function ensureFm(){
   if(!state.lineup.fm) state.lineup.fm=newFm();
   Object.keys(FM).forEach(function(k){
     if(!state.lineup.fm[k]) state.lineup.fm[k]={s:{},next:'L1'};
     if(!state.lineup.fm[k].s) state.lineup.fm[k].s={};
+    // "Danach": 1./2./3. Reihe oder Alternative Aufstellung
+    if(k!=='ALT' && ['L1','L2','L3','ALT'].indexOf(state.lineup.fm[k].next)===-1) state.lineup.fm[k].next='L1';
   });
 }
 
@@ -598,8 +606,8 @@ function prepSummaryHtml(){
   });
   ensureFm();
   Object.keys(FM).forEach(function(k){
-    var names=[]; for(var i=1;i<=FM[k].n;i++){var pid=state.lineup.fm[k].s[i]; names.push(pid!=null?nm(pid):'–');}
-    h+='<tr><td>'+FM[k].title+'</td><td>'+names.join(' · ')+'<br><span class="muted">Danach: '+(nextLabel(state.lineup.fm[k].next)||'–')+'</span></td></tr>';
+    var names=[]; for(var i=1;i<=FM[k].n;i++){var pid=state.lineup.fm[k].s[i]; names.push(FM[k].names[i]+': '+(pid!=null?nm(pid):'–'));}
+    h+='<tr><td>'+FM[k].title+'</td><td>'+names.join(' · ')+(k==='ALT'?'':'<br><span class="muted">Danach: '+(nextLabel(state.lineup.fm[k].next)||'–')+'</span>')+'</td></tr>';
   });
   h+='</table>';
   if(empty) h+='<p class="muted" style="margin:8px 0 0;">'+empty+' von 15 Plätzen sind leer. Das ist in Ordnung, wenn weniger Reihen spielen.</p>';
@@ -832,23 +840,23 @@ function updateSmPolling(){
   if(!on&&smPollTimer){clearInterval(smPollTimer); smPollTimer=null;}
 }
 /* ---------- Sonderformationen: Überzahl, Unterzahl 1/2 (zum Ansagen) ---------- */
-function nextLabel(val){return {L1:'1. Reihe',L2:'2. Reihe',L3:'3. Reihe',PP:'Überzahl',U1:'Unterzahl 1',U2:'Unterzahl 2'}[val]||'';}
+function nextLabel(val){return {L1:'1. Reihe',L2:'2. Reihe',L3:'3. Reihe',ALT:'Alternative Aufstellung',PP:'Überzahl',U1:'Unterzahl 1',U2:'Unterzahl 2'}[val]||'';}
 function fmFieldHtml(key,modal){
   ensureFm();
   var f=FM[key], pos=FM_POS[f.kind];
-  var html='<div class="fm-field" style="height:'+(f.kind==='pp'?250:300)+'px;">'+
-    (f.kind==='pp'?'<div class="fm-goal" style="top:3%;left:38%;width:24%;height:15%;"></div>':'<div class="fm-goal" style="top:80%;left:40%;width:20%;height:13%;"></div>');
+  var html='<div class="fm-field" style="height:'+(f.kind==='pp'?250:(f.kind==='uz'?300:230))+'px;">'+
+    (f.kind==='pp'?'<div class="fm-goal" style="top:3%;left:38%;width:24%;height:15%;"></div>':(f.kind==='uz'?'<div class="fm-goal" style="top:80%;left:40%;width:20%;height:13%;"></div>':''));
   for(var i=1;i<=f.n;i++){
     var pid=state.lineup.fm[key].s[i], p=pid!=null?playerById(pid):null;
     var sel=!modal&&selectedSlot&&selectedSlot.line===key&&String(selectedSlot.pos)===String(i);
-    html+='<div class="fm-slot'+(p?' filled':'')+(sel?' selected':'')+'" style="left:'+pos[i][0]+'%; top:'+pos[i][1]+'%;'+(f.kind==='uz'?' width:24%;':'')+'"'+(modal?'':' onclick="slotClick(\''+key+'\','+i+')"')+'>'+
-      '<span class="fm-num">'+i+'</span><span>'+(p?esc((p.nr?p.nr+' ':'')+shownName(p)):'+')+'</span></div>';
+    html+='<div class="fm-slot'+(p?' filled':'')+(sel?' selected':'')+'" style="left:'+pos[i][0]+'%; top:'+pos[i][1]+'%;'+(f.kind==='uz'?' width:24%;':(f.kind==='line'?' width:27%;':''))+'"'+(modal?'':' onclick="slotClick(\''+key+'\','+i+')"')+'>'+
+      '<span class="fm-num">'+esc(f.names[i]||i)+'</span><span>'+(p?esc((p.nr?p.nr+' ':'')+shownName(p)):'+')+'</span></div>';
   }
   return html+'</div>';
 }
 function fmNextHtml(key){
   var cur=state.lineup.fm[key].next||'';
-  var opts=[['L1','1. Reihe'],['L2','2. Reihe'],['L3','3. Reihe'],['PP','Überzahl'],['U1','Unterzahl 1'],['U2','Unterzahl 2']].filter(function(o){return o[0]!==key;});
+  var opts=[['L1','1. Reihe'],['L2','2. Reihe'],['L3','3. Reihe'],['ALT','Alternative Aufstellung']];
   return '<div class="fm-next"><span>Danach:</span>'+opts.map(function(o){
     return '<button type="button" class="'+(cur===o[0]?'active':'')+'" onclick="setFmNext(\''+key+'\',\''+o[0]+'\')">'+o[1]+'</button>';
   }).join('')+'</div>';
@@ -860,6 +868,11 @@ function lineNamesHtml(i){
   return 'Sturm: '+[l.OL,l.C,l.OR].map(nm).join(' · ')+'<br>Abwehr: '+[l.DL,l.DR].map(nm).join(' · ');
 }
 // Vollbild-Ansicht zum Ansagen der Formation im Spiel
+function altNamesHtml(){
+  ensureFm(); var a=state.lineup.fm.ALT.s;
+  function nm(i){var p=a[i]!=null?playerById(a[i]):null; return p?esc((p.nr?p.nr+' ':'')+shownName(p)):'–';}
+  return 'Sturm: '+[1,2,3].map(nm).join(' · ')+'<br>Abwehr: '+[4,5].map(nm).join(' · ');
+}
 function showFormation(key){
   ensureFm();
   var f=FM[key], nx=state.lineup.fm[key].next||'', g=playerById(state.lineup.goalie);
@@ -867,6 +880,7 @@ function showFormation(key){
   if(nx){
     body+='<div style="margin-top:10px; padding:10px 12px; background:var(--panel); border-radius:10px; color:var(--text);"><b>Danach: '+nextLabel(nx)+'</b>';
     if(nx.charAt(0)==='L') body+='<br><span style="font-size:15px; color:var(--text-secondary);">'+lineNamesHtml(parseInt(nx.charAt(1),10)-1)+'</span>';
+    else if(nx==='ALT') body+='<br><span style="font-size:15px; color:var(--text-secondary);">'+altNamesHtml()+'</span>';
     else body+=' <button type="button" style="margin-left:8px;" onclick="showFormation(\''+nx+'\')">Anzeigen ›</button>';
     body+='</div>';
   } else body+='<p class="muted" style="margin-top:8px;">Kein "Danach" festgelegt.</p>';
@@ -1245,7 +1259,7 @@ function availableForSlot(slot){
 }
 function getSlotValue(slot){if(isFm(slot.line)){ensureFm(); var fv=state.lineup.fm[slot.line].s[slot.pos]; return fv==null?null:fv;} return slot.line==='G'?state.lineup.goalie:(slot.line==='X'?state.lineup.extra:state.lineup.lines[slot.line][slot.pos]);}
 function setSlotValue(slot,val){if(isFm(slot.line)){ensureFm(); if(val==null) delete state.lineup.fm[slot.line].s[slot.pos]; else state.lineup.fm[slot.line].s[slot.pos]=val; return;} if(slot.line==='G')state.lineup.goalie=val; else if(slot.line==='X')state.lineup.extra=val; else state.lineup.lines[slot.line][slot.pos]=val;}
-function slotLabel(slot){if(isFm(slot.line)) return FM[slot.line].title+' – Position '+slot.pos; return slot.line==='G'?'Goalie':(slot.line==='X'?'6. Feldspieler (Empty Net)':(slot.line+1)+'. Reihe – '+POS_LABELS[slot.pos]);}
+function slotLabel(slot){if(isFm(slot.line)) return FM[slot.line].title+' – '+(FM[slot.line].names[slot.pos]||('Position '+slot.pos)); return slot.line==='G'?'Goalie':(slot.line==='X'?'6. Feldspieler (Empty Net)':(slot.line+1)+'. Reihe – '+POS_LABELS[slot.pos]);}
 
 function slotClick(lineIdx,pos){selectedSlot={line:lineIdx,pos:pos}; renderLineup(); renderSlotPanel();}
 function renderSlotPanel(){
@@ -1375,7 +1389,7 @@ function renderLineup(){
   }
   ensureFm();
   Object.keys(FM).forEach(function(k){
-    html+='<div class="line-card"><p class="line-title">'+FM[k].title+' ('+FM[k].n+' Feldspieler + Torwart)</p>'+fmFieldHtml(k,false)+fmNextHtml(k)+'</div>';
+    html+='<div class="line-card"><p class="line-title">'+FM[k].title+' ('+FM[k].n+' Feldspieler + Torwart)</p>'+fmFieldHtml(k,false)+(k==='ALT'?'':fmNextHtml(k))+'</div>';
   });
   el.innerHTML=html;
   var bench=availableForSlot(null);
