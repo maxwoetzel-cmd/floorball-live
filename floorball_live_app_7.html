@@ -92,7 +92,8 @@
 
   /* ---- Ablauf in Phasen (Vorbereitung, Spiel, Pause, Ende) ---- */
   section[data-ph]{display:none;}
-  body.phase-prep section[data-ph~="prep"], body.phase-play section[data-ph~="play"],
+  body.phase-prep.step-1 section[data-ph~="prep"][data-step~="1"], body.phase-prep.step-2 section[data-ph~="prep"][data-step~="2"],
+  body.phase-prep.step-3 section[data-ph~="prep"][data-step~="3"], body.phase-play section[data-ph~="play"],
   body.phase-break section[data-ph~="break"], body.phase-end section[data-ph~="end"]{display:block;}
   .web-only{display:none;}
   body.webapp .web-only{display:block;}
@@ -163,9 +164,15 @@
     <button type="button" class="min-btn" onclick="changeMinute(1)" aria-label="Minute hoch">+</button>
   </div>
   <div class="tb-row tb-actions">
-    <button type="button" id="phase-btn" class="primary phase-btn" onclick="phaseMain()">Spiel starten – 1. Drittel</button>
+    <button type="button" id="home-btn" onclick="goHome()" style="display:none; min-height:44px; padding:6px 12px; font-size:14px;">⌂ Startseite</button>
+    <button type="button" id="phase-btn" class="primary phase-btn" onclick="phaseMain()">Weiter: Aufstellung ›</button>
     <button type="button" id="phase-btn2" class="phase-btn" style="display:none;" onclick="phaseSecond()">Spiel beenden</button>
   </div>
+</div>
+
+<div id="resume-bar" style="display:none; align-items:center; gap:10px; flex-wrap:wrap; background:var(--panel-alt); border:1px solid var(--border); border-radius:var(--radius); padding:8px 12px; margin-bottom:10px;">
+  <span class="muted" style="flex:1; min-width:200px;">Das Spiel ist noch nicht beendet. Änderungen an der Aufstellung gelten ab dem nächsten Drittel.</span>
+  <button type="button" class="primary" onclick="resumeGame()">Zurück zum Spiel</button>
 </div>
 
 <section id="sec-summary" data-ph="break end">
@@ -173,8 +180,8 @@
   <div id="summary-body"></div>
 </section>
 
-<section id="sec-game" data-ph="prep">
-  <h2>1 · Spiel</h2>
+<section id="sec-game" data-ph="prep" data-step="1">
+  <h2>Spiel</h2>
   <div class="row" style="margin-bottom:10px;">
     <div style="flex:1; min-width:120px;">
       <label class="muted" style="display:block; margin-bottom:4px;">Unser Team</label>
@@ -202,8 +209,8 @@
   </div>
 </section>
 
-<section id="sec-roster" data-ph="prep">
-  <h2>2 · Kader</h2>
+<section id="sec-roster" data-ph="prep" data-step="1">
+  <h2>Kader</h2>
   <div class="web-only">
     <div class="row">
       <button type="button" onclick="loadStammkader()" style="flex:1;">Stammkader laden</button>
@@ -225,12 +232,17 @@
   </details>
 </section>
 
-<section id="sec-present" data-ph="prep">
-  <h2>3 · Wer ist dabei?</h2>
+<section id="sec-present" data-ph="prep" data-step="1">
+  <h2>Wer ist dabei?</h2>
   <button type="button" class="web-only" onclick="loadSmLineup()" style="width:100%; margin-bottom:8px;">Aufstellung dieses Spiels aus dem Saisonmanager übernehmen</button>
   <p class="muted" id="present-info" style="margin:0 0 4px;"></p>
   <p class="muted" style="margin:0;">Antippen = anwesend. Steht im Saisonmanager noch nichts, einfach selbst antippen.</p>
   <div class="chip-grid" id="present-chips"></div>
+</section>
+
+<section id="sec-prepsum" data-ph="prep" data-step="3">
+  <h2>Spielstart</h2>
+  <div id="prepsum-body"></div>
 </section>
 
 <div id="play-layout">
@@ -277,8 +289,8 @@
       <p class="muted" id="bully-live" style="margin:8px 0 0;"></p>
     </section>
 
-    <section id="sec-lineup" data-ph="prep play break">
-      <h2><span class="num-prep">4 · </span>Aufstellung <span id="lineup-period-badge" style="color:var(--wir); font-weight:700;"></span>
+    <section id="sec-lineup" data-ph="prep play break" data-step="2">
+      <h2>Aufstellung <span id="lineup-period-badge" style="color:var(--wir); font-weight:700;"></span>
         <button type="button" class="toggle-btn" onclick="toggleSection('sec-lineup')">Wechsel ▾</button></h2>
       <div class="sec-body">
         <p class="muted" style="margin:0 0 4px;">Position antippen und Spieler wählen. Besetzten Spieler antippen für einen Wechsel.</p>
@@ -334,7 +346,7 @@
   </div>
 </div>
 
-<section id="sec-export" data-ph="prep end">
+<section id="sec-export" data-ph="prep end" data-step="1">
   <h2>Speichern und übertragen</h2>
   <p class="muted" style="margin:0 0 8px;">Wird automatisch auf diesem Gerät gespeichert (in der Web-App zusätzlich nach Drive). Der Kader bleibt bei "Neues Spiel" erhalten.</p>
   <div class="row">
@@ -427,7 +439,7 @@ function zoneLabel(z){
 function zoneRowLabels(rows){
   var names={tornah:'Kurzdistanz',zentral:'Halbfeld',fern:'Langdistanz'};
   return (rows||currentRows()).map(function(r){
-    return '<text x="20" y="'+(r.y+24)+'" font-size="14" fill="rgba(255,255,255,0.6)" style="pointer-events:none">'+names[r.key]+'</text>';
+    return '<text transform="translate(27,'+(r.y+r.h/2)+') rotate(-90)" text-anchor="middle" font-size="14" fill="rgba(255,255,255,0.65)" style="pointer-events:none">'+names[r.key]+'</text>';
   }).join('');
 }
 // Trikotfarbe: manche Spieler tragen je nach Trikotsatz (blau/weiß) eine andere Nummer
@@ -459,9 +471,15 @@ function updateTopbar(){
 function renderPhase(){
   var ph=state.phase||'prep', b=document.body;
   ['prep','play','break','end'].forEach(function(p){b.classList.toggle('phase-'+p, p===ph);});
+  var stp=ph==='prep'?(state.step||1):0; [1,2,3].forEach(function(n){b.classList.toggle('step-'+n, stp===n);});
   var idx=PERIODS.indexOf(state.period), btn=document.getElementById('phase-btn'), btn2=document.getElementById('phase-btn2'), label='';
   btn2.style.display='none'; btn.className='primary phase-btn'; btn.dataset.confirm='0';
-  if(ph==='prep'){btn.textContent='Spiel starten – 1. Drittel'; label='Vorbereitung';}
+  if(ph==='prep'){
+    var st=state.step||1;
+    btn.textContent=st===1?'Weiter: Aufstellung ›':(st===2?'Weiter: Spielstart ›':'Spiel starten – 1. Drittel');
+    label='Vorbereitung · Schritt '+st+' von 3';
+    if(st>1){btn2.style.display='inline-block'; btn2.textContent='‹ Zurück';}
+  }
   else if(ph==='play'){btn.textContent='Drittel beendet'; btn.className='phase-btn'; label=state.period+' läuft';}
   else if(ph==='break'){
     label=state.period+' beendet';
@@ -470,12 +488,15 @@ function renderPhase(){
     else{btn.textContent='Spiel beenden';}
   } else {btn.textContent='Zurück zur Pause'; btn.className='phase-btn'; label='Spiel beendet';}
   document.getElementById('tb-period').textContent=label;
-  updateTopbar(); updateMinuteCaption(); updateJerseyButtons(); renderSummary(); updateSmPolling();
+  updateTopbar(); updateMinuteCaption(); updateJerseyButtons(); renderSummary(); updateSmPolling(); renderPrepExtras();
 }
 var confirmEndTimer=null;
 function phaseMain(){
   var ph=state.phase||'prep', btn=document.getElementById('phase-btn');
-  if(ph==='prep'){beginGame();}
+  if(ph==='prep'){
+    if((state.step||1)<3){state.step=(state.step||1)+1; save(); renderAll(); window.scrollTo(0,0);}
+    else beginGame();
+  }
   else if(ph==='play'){
     // Zweimal tippen, damit ein Drittel nicht versehentlich beendet wird
     if(btn.dataset.confirm==='1'){clearTimeout(confirmEndTimer); btn.dataset.confirm='0'; endPeriod();}
@@ -501,12 +522,56 @@ function beginGame(){
     resetGameData(); startPeriod('1. Drittel');
   });
 }
-function phaseSecond(){endGame();}
+// Zweiter Knopf: in der Vorbereitung "Zurück", nach dem 3. Drittel "Spiel beenden"
+function phaseSecond(){
+  if((state.phase||'prep')==='prep'){state.step=Math.max(1,(state.step||1)-1); save(); renderAll(); window.scrollTo(0,0);}
+  else endGame();
+}
+// Zurück zur Startseite (Vorbereitung); das laufende Spiel bleibt gespeichert und lässt sich fortsetzen
+function goHome(){
+  var ph=state.phase||'prep';
+  if(ph==='prep') return;
+  if(ph==='play' && !confirm('Das Drittel läuft noch. Zur Startseite wechseln? Das Spiel bleibt gespeichert, über "Zurück zum Spiel" geht es weiter.')) return;
+  state.resume=ph; state.phase='prep'; state.step=1; state.pendingZone=null; selectedSlot=null;
+  save(); renderAll(); window.scrollTo(0,0);
+}
+function resumeGame(){
+  if(!state.resume) return;
+  state.phase=state.resume; state.resume=''; state.step=1;
+  save(); renderAll(); window.scrollTo(0,0);
+}
+function prepSummaryHtml(){
+  var g=state.game, pres=state.roster.filter(function(p){return p.present;}), ln=state.lineup, warn=[];
+  function nm(id){var p=playerById(id); return p?esc(playerLabel(p)):'–';}
+  var empty=0; ln.lines.forEach(function(l){POS_KEYS.forEach(function(k){if(l[k]==null) empty++;});});
+  if(!pres.length) warn.push('Noch keine anwesenden Spieler gewählt (Schritt 1).');
+  if(ln.goalie==null) warn.push('Noch kein Torwart in der Aufstellung (Schritt 2).');
+  var h='<table>'+
+    '<tr><td>Gegner</td><td>'+esc(oppName())+'</td></tr>'+
+    (g?'<tr><td>Spiel</td><td>'+esc(fmtDate(g.date)+' '+(g.time||'')+' · '+(g.arena||''))+'</td></tr>':'')+
+    '<tr><td>Trikot</td><td>'+((state.jersey||'blau')==='blau'?'blau':'weiß')+'</td></tr>'+
+    '<tr><td>Anwesend</td><td>'+pres.length+' von '+state.roster.length+'</td></tr>'+
+    '<tr><td>Tor</td><td>'+nm(ln.goalie)+'</td></tr>';
+  ln.lines.forEach(function(l,i){
+    h+='<tr><td>'+(i+1)+'. Reihe</td><td>Sturm: '+[l.OL,l.C,l.OR].map(nm).join(' · ')+'<br>Abwehr: '+[l.DL,l.DR].map(nm).join(' · ')+'</td></tr>';
+  });
+  h+='</table>';
+  if(empty) h+='<p class="muted" style="margin:8px 0 0;">'+empty+' von 15 Plätzen sind leer. Das ist in Ordnung, wenn weniger Reihen spielen.</p>';
+  if(warn.length) h+='<p style="margin:8px 0 0; color:var(--danger);">'+warn.join('<br>')+'</p>';
+  if(inWebApp()) h+='<p class="muted" style="margin:8px 0 0;">Diese Einstellungen werden automatisch in Drive gesichert und lassen sich auf einem anderen Gerät laden.</p>';
+  return h;
+}
+function renderPrepExtras(){
+  var ph=state.phase||'prep';
+  var hb=document.getElementById('home-btn'); if(hb) hb.style.display=ph==='prep'?'none':'inline-block';
+  var rb=document.getElementById('resume-bar'); if(rb) rb.style.display=(ph==='prep'&&state.resume)?'flex':'none';
+  var pb=document.getElementById('prepsum-body'); if(pb) pb.innerHTML=(ph==='prep'&&(state.step||1)===3)?prepSummaryHtml():'';
+}
 function toggleSection(id){document.getElementById(id).classList.toggle('open');}
 function startPeriod(name){
   if(state.phase==='prep' && !state.roster.some(function(p){return p.present;})){showToast('Erst oben die anwesenden Spieler wählen'); return;}
   state.period=name; state.minute=0; document.getElementById('current-minute').value=0;
-  state.phase='play'; state.pendingZone=null; selectedSlot=null;
+  state.phase='play'; state.step=1; state.resume=''; state.pendingZone=null; selectedSlot=null;
   var n=resumeAll(true);
   document.getElementById('sec-lineup').classList.remove('open'); document.getElementById('sec-stats').classList.remove('open');
   save(); renderAll(); showToast(name+' gestartet – '+n+' Spieler auf dem Eis');
