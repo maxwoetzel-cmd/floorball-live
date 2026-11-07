@@ -66,6 +66,9 @@ Verantwortlich: Max Woetzel (Head-Coach Herren).
 - Export (JSON, CSV) direkt nach Drive; Sicherung vor „Neues Spiel“ und vor Import. Gerätewechsel über den Autosave.
 - Backend `Code.gs`: `doGet`, `getSchedule`, `getGames`, `getRoster`, `getGameLineup`, `getGameEvents`, `saveFile`, `readFile`, Testfunktionen. Aktuell Bereitstellung Version 5.
 - Testanleitung für andere Tester (Google-Dokument, Stand 08.11.2026).
+- Design-Runde 08.11.2026 (Tablet in der Halle): höherer Kontrast für `--text-muted`, größere Kleinschrift, Spielstand 40 px,
+  Empty-Net-Badge in Amber (`--accent`) statt Rot, Toast oben, Vibration plus Toast nach jedem erfassten Schuss.
+  Offen: Vereinslogo (blau/weiß) als Inline-SVG/Base64, Schussmarker-Form nach Ergebnis, Stat-Tabellen (Zebra/Balken).
 
 **Getestet** wurde mit simulierten Daten im Browser und mit Node (Syntax, Rechenlogik). **Nicht getestet:** echtes Spiel, echtes Tablet,
 Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie bei beendeten Spielen angenommen), Strafen live.
