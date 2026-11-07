@@ -141,7 +141,9 @@
   }
   .fm-field{position:relative; background:var(--field); border-radius:12px; margin:6px auto 4px; max-width:420px; overflow:hidden;}
   .fm-bg{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none;}
-  .lf-field .slot{position:absolute; width:27%; transform:translate(-50%,-50%); min-height:50px;}
+  .slot-grid-off{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:10px; align-items:start;}
+  .slot-grid-off > :nth-child(2){margin-top:22px;} /* Center ein Stueck hinter den Offense-Spielern */
+  .slot-grid-def{display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:0 12%;}
   .fm-goal{position:absolute; border:2px solid #fff; border-radius:3px; opacity:0.85; pointer-events:none;}
   .fm-slot{position:absolute; width:28%; transform:translate(-50%,-50%); min-height:46px; padding:4px 2px; text-align:center; border-radius:10px;
     background:rgba(255,255,255,0.14); border:1.5px dashed rgba(255,255,255,0.6); color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; font-size:13px;}
@@ -149,7 +151,7 @@
   .fm-slot.selected{outline:3px solid var(--accent);}
   .fm-num{font-size:10px; opacity:0.7;}
   #fm-modal .fm-slot{font-size:17px; min-height:64px; cursor:default;}
-  #fm-modal .fm-field{height:360px !important;}
+  #fm-modal .fm-field{max-width:560px;}
   .fm-next{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:6px; color:#fff; font-size:12px;}
   .fm-next button{min-height:34px; padding:4px 10px; font-size:12px; background:rgba(255,255,255,0.14); color:#fff; border-color:rgba(255,255,255,0.4);}
   .fm-next button.active{background:#fff; color:#14181b; border-color:#fff;}
@@ -435,7 +437,7 @@ var FM={
   ALT:{title:'Alternative Aufstellung', n:5, kind:'line', names:{1:'Offense links', 2:'Center', 3:'Offense rechts', 4:'Defense links', 5:'Defense rechts'}}
 };
 // Lage der Positionen in Prozent (nach den Skizzen: Überzahl mit Tor oben, Unterzahl mit Tor unten)
-var FM_POS={pp:{1:[16,36],2:[16,88],3:[50,62],4:[84,63],5:[52,90]}, uz:{1:[63,67],2:[37,67],3:[50,42],4:[58,15]}, line:{1:[18,20],2:[50,38],3:[82,20],4:[32,74],5:[68,74]}};
+var FM_POS={pp:{1:[16,36],2:[16,88],3:[50,62],4:[84,63],5:[52,90]}, uz:{1:[63,50],2:[37,50],3:[50,30],4:[58,11]}, line:{1:[18,34],2:[50,58],3:[82,34],4:[32,82],5:[68,82]}};
 function newFm(){return {PP:{s:{},next:'L1'}, U1:{s:{},next:'L1'}, U2:{s:{},next:'L1'}, ALT:{s:{},next:''}};}
 function isFm(line){return line==='PP'||line==='U1'||line==='U2'||line==='ALT';}
 function emptyLineup(){return {goalie:null, extra:null, lines:[emptyLine(),emptyLine(),emptyLine()], fm:newFm()};}
@@ -906,7 +908,7 @@ function nextLabel(val){return {L1:'1. Reihe',L2:'2. Reihe',L3:'3. Reihe',ALT:'A
 function fmFieldHtml(key,modal,altMode){
   ensureFm();
   var f=FM[key], pos=FM_POS[f.kind];
-  var html='<div class="fm-field" style="aspect-ratio:'+(f.kind==='pp'?'100/82':(f.kind==='uz'?'100/98':'100/66'))+';">'+fieldBgSvg(f.kind==='uz'?'defense':'offense');
+  var html='<div class="fm-field" style="aspect-ratio:'+LF_DIM[f.kind][0]+'/'+LF_DIM[f.kind][1]+';">'+fieldBgSvg(f.kind);
   for(var i=1;i<=f.n;i++){
     var pid=state.lineup.fm[key].s[i], p=pid!=null?playerById(pid):null;
     var sel=altMode?(altSel===i):(!modal&&selectedSlot&&selectedSlot.line===key&&String(selectedSlot.pos)===String(i));
@@ -1091,15 +1093,23 @@ function setTeam(btn){
 }
 function currentRows(){return state.currentTeam==='Wir'?ZONE_ROWS_OFF:ZONE_ROWS_DEF;}
 
-// Spielfeld-Hintergrund fuer Aufstellungen: gleiche Zeichnung wie das Schussfeld, ohne Zonenlinien.
-// Offense = Tor oben (Ausschnitt von oben), Defense = Tor unten (Ausschnitt von unten).
-function fieldBgSvg(orientation){
-  return '<svg class="fm-bg" viewBox="0 0 440 470" preserveAspectRatio="'+(orientation==='offense'?'xMidYMin':'xMidYMax')+' slice" xmlns="http://www.w3.org/2000/svg">'+fieldBaseSvg(orientation,true)+'</svg>';
+// Spielfeld-Ausschnitt fuer Ueberzahl/Unterzahl/Alternative. Massstab: 20 m Feldbreite = 400 Einheiten (20 je Meter).
+// Torraum 5 x 4 m, Torwartraum 2,5 x 1 m, Tor 1,6 m, Torlinie 2,85 m vor der Bande. Der Ausschnitt ist offen (zur Mitte hin abgeschnitten).
+var LF_DIM={pp:[400,330], line:[400,300], uz:[400,340]};
+function fieldBgSvg(kind){
+  var d=LF_DIM[kind], w=d[0], h=d[1], top=(kind!=='uz'), S='stroke="#fff" fill="none"', p=[];
+  var gl=top?61:h-61, cx=w/2, dir=top?1:-1; // Torlinie, Mitte, Richtung ins Feld
+  function box(bw,bd){return '<rect x="'+(cx-bw/2)+'" y="'+(top?gl:gl-bd)+'" width="'+bw+'" height="'+bd+'" '+S+' stroke-width="2.5"></rect>';}
+  p.push(top?'<path d="M4 '+h+'V28Q4 4 28 4H'+(w-28)+'Q'+(w-4)+' 4 '+(w-4)+' 28V'+h+'" '+S+' stroke-width="3"></path>'
+            :'<path d="M4 0V'+(h-28)+'Q4 '+(h-4)+' 28 '+(h-4)+'H'+(w-28)+'Q'+(w-4)+' '+(h-4)+' '+(w-4)+' '+(h-28)+'V0" '+S+' stroke-width="3"></path>');
+  p.push(box(100,80), box(50,20));
+  p.push('<rect x="'+(cx-16)+'" y="'+(top?gl-23:gl)+'" width="32" height="23" '+S+' stroke-width="3"></rect>');
+  return '<svg class="fm-bg" viewBox="0 0 '+w+' '+h+'" xmlns="http://www.w3.org/2000/svg">'+p.join('')+'</svg>';
 }
-function fieldBaseSvg(orientation,plain){
+function fieldBaseSvg(orientation){
   var W=440,H=470,parts=[];
   parts.push('<rect x="8" y="8" width="'+(W-16)+'" height="'+(H-16)+'" rx="40" fill="#002d5a" stroke="#ffffff" stroke-width="4"></rect>');
-  if(!plain) [[60,60],[W-60,60],[60,H-60],[W-60,H-60]].forEach(function(p){
+  [[60,60],[W-60,60],[60,H-60],[W-60,H-60]].forEach(function(p){
     parts.push('<g stroke="#ffffff" stroke-width="4" stroke-linecap="round"><line x1="'+(p[0]-10)+'" y1="'+p[1]+'" x2="'+(p[0]+10)+'" y2="'+p[1]+'"></line><line x1="'+p[0]+'" y1="'+(p[1]-10)+'" x2="'+p[0]+'" y2="'+(p[1]+10)+'"></line></g>');
   });
   if(orientation==='offense'){
@@ -1115,7 +1125,6 @@ function fieldBaseSvg(orientation,plain){
     parts.push('<rect x="'+(W/2-48)+'" y="'+(H-86)+'" width="96" height="52" fill="none" stroke="#ffffff" stroke-width="2.5"></rect>');
     parts.push('<rect x="'+(W/2-20)+'" y="'+(H-40)+'" width="40" height="16" fill="none" stroke="#ffffff" stroke-width="3"></rect>');
   }
-  if(plain) return parts.join('');
   [149,291].forEach(function(x){parts.push('<line x1="'+x+'" y1="8" x2="'+x+'" y2="'+(H-8)+'" stroke="rgba(255,255,255,0.30)" stroke-width="1" stroke-dasharray="4,4"></line>');});
   [159,311].forEach(function(y){parts.push('<line x1="8" y1="'+y+'" x2="'+(W-8)+'" y2="'+y+'" stroke="rgba(255,255,255,0.30)" stroke-width="1" stroke-dasharray="4,4"></line>');});
   return parts.join('');
@@ -1517,8 +1526,7 @@ function benchDrop(ev){
 function dragOverHandler(ev){ev.preventDefault(); ev.currentTarget.classList.add('dragover');}
 function dragLeaveHandler(ev){ev.currentTarget.classList.remove('dragover');}
 
-var LINE_POS={OL:[20,24],C:[50,44],OR:[80,24],DL:[33,76],DR:[67,76]}; // Prozent im Feld, Tor oben
-function slotHtml(lineIdx,pos,xy){
+function slotHtml(lineIdx,pos){
   var val=lineIdx==='G'?state.lineup.goalie:(lineIdx==='X'?state.lineup.extra:state.lineup.lines[lineIdx][pos]);
   var p=playerById(val);
   var isSel=selectedSlot&&selectedSlot.line===lineIdx&&selectedSlot.pos===pos;
@@ -1526,7 +1534,7 @@ function slotHtml(lineIdx,pos,xy){
   var posLabel=lineIdx==='G'?'Goalie':(lineIdx==='X'?'6. Feldspieler':POS_LABELS[pos]);
   var who=p?playerLabel(p):'+';
   var lineArg=(lineIdx==='G'||lineIdx==='X')?"'"+lineIdx+"'":lineIdx;
-  return '<div class="'+cls+'"'+(xy?' style="left:'+xy[0]+'%; top:'+xy[1]+'%;"':'')+' data-slot="'+lineIdx+':'+pos+'" onclick="slotClick('+lineArg+',\''+pos+'\')" '+
+  return '<div class="'+cls+'" data-slot="'+lineIdx+':'+pos+'" onclick="slotClick('+lineArg+',\''+pos+'\')" '+
     'ondragover="dragOverHandler(event)" ondragleave="dragLeaveHandler(event)" ondrop="slotDrop(event,'+lineArg+',\''+pos+'\')">'+
     '<span class="pos">'+posLabel+'</span><span class="who">'+who+'</span></div>';
 }
@@ -1536,8 +1544,8 @@ function renderLineup(){
   if(state.emptyNet) html+='<div class="line-card"><p class="line-title clickable" onclick="togglePool(\'X\')">Empty Net – 6. Feldspieler '+poolMark('X')+'</p><div class="goalie-wrap">'+slotHtml('X','X')+'</div>'+poolHtml('X')+'</div>';
   for(var i=0;i<3;i++){
     html+='<div class="line-card"><p class="line-title clickable" onclick="togglePool(\'L'+i+'\')">'+(i+1)+'. Reihe '+poolMark('L'+i)+'</p>'+
-      '<div class="fm-field lf-field" style="aspect-ratio:100/88;">'+fieldBgSvg('offense')+
-      ['OL','C','OR','DL','DR'].map(function(k){return slotHtml(i,k,LINE_POS[k]);}).join('')+'</div>'+poolHtml('L'+i)+'</div>';
+      '<div class="slot-grid-off">'+slotHtml(i,'OL')+slotHtml(i,'C')+slotHtml(i,'OR')+'</div>'+
+      '<div class="slot-grid-def">'+slotHtml(i,'DL')+slotHtml(i,'DR')+'</div>'+poolHtml('L'+i)+'</div>';
   }
   ensureFm();
   Object.keys(FM).forEach(function(k){
