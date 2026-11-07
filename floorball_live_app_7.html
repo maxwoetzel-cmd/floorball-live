@@ -155,6 +155,14 @@
   .fm-next button{min-height:34px; padding:4px 10px; font-size:12px; background:rgba(255,255,255,0.14); color:#fff; border-color:rgba(255,255,255,0.4);}
   .fm-next button.active{background:#fff; color:#14181b; border-color:#fff;}
   #fm-modal .fm-num{font-size:13px; opacity:0.8;}
+  .fm-pencil{min-height:30px; padding:2px 10px; font-size:14px; background:rgba(255,255,255,0.18); color:#fff; border-color:rgba(255,255,255,0.45); vertical-align:middle; text-transform:none; letter-spacing:0;}
+  .fm-sub{font-weight:400; opacity:0.75; text-transform:none; letter-spacing:0;}
+  .btn-bully-won{background:#7fe0a3 !important; border-color:#7fe0a3 !important; color:#10301d !important; font-weight:600;}
+  .btn-bully-lost{background:#f5a3a3 !important; border-color:#f5a3a3 !important; color:#3d1313 !important; font-weight:600;}
+  .btn-grey{background:#5d676d !important; border-color:#6f7a81 !important; color:#ffffff !important;}
+  .btn-fm{min-height:60px; font-size:16px; font-weight:700;}
+  .btn-fm-pp{background:#f2b84b !important; border-color:#f2b84b !important; color:#241a05 !important;}
+  .btn-fm-uz{background:#7b61d9 !important; border-color:#7b61d9 !important; color:#ffffff !important;}
 </style>
 </head>
 <body>
@@ -291,20 +299,20 @@
     <section id="sec-quick" data-ph="play">
       <h2>Schnelltasten</h2>
       <div class="row">
-        <button type="button" class="ok" id="bully-won-btn" onclick="addBully(true)" style="flex:1;">Bully gewonnen · 0</button>
-        <button type="button" id="bully-lost-btn" onclick="addBully(false)" style="flex:1;">Bully verloren · 0</button>
-        <button type="button" onclick="undoBully()" style="flex:0 0 auto;">Rückgängig</button>
+        <button type="button" class="btn-bully-won" id="bully-won-btn" onclick="addBully(true)" style="flex:1;">Bully gewonnen · 0</button>
+        <button type="button" class="btn-bully-lost" id="bully-lost-btn" onclick="addBully(false)" style="flex:1;">Bully verloren · 0</button>
+        <button type="button" class="btn-grey" onclick="undoBully()" style="flex:0 0 auto;">Rückgängig</button>
       </div>
       <div class="row" style="margin-top:8px;">
         <button type="button" id="en-btn" onclick="toggleEmptyNet()" style="flex:1;">Torwart raus (Empty Net)</button>
-        <button type="button" onclick="undoLastShot()" style="flex:1;">Letzten Schuss löschen</button>
+        <button type="button" class="btn-grey" onclick="undoLastShot()" style="flex:1;">Letzten Schuss löschen</button>
       </div>
-      <div class="row" style="margin-top:8px;">
-        <button type="button" onclick="showFormation('PP')" style="flex:1;">Überzahl</button>
-        <button type="button" onclick="showFormation('U1')" style="flex:1;">Unterzahl 1</button>
-        <button type="button" onclick="showFormation('U2')" style="flex:1;">Unterzahl 2</button>
+      <p class="muted" style="margin:12px 0 4px; font-weight:600;">Formationen ansagen</p>
+      <div class="row">
+        <button type="button" id="fm-btn-PP" class="btn-fm btn-fm-pp" onclick="showFormation('PP')" style="flex:1;">Überzahl</button>
+        <button type="button" id="fm-btn-U1" class="btn-fm btn-fm-uz" onclick="showFormation('U1')" style="flex:1;">Unterzahl 1</button>
+        <button type="button" id="fm-btn-U2" class="btn-fm btn-fm-uz" onclick="showFormation('U2')" style="flex:1;">Unterzahl 2</button>
       </div>
-      <p class="muted" style="margin:4px 0 0;">Formationen zum Ansagen</p>
       <p class="muted" id="bully-live" style="margin:8px 0 0;"></p>
     </section>
 
@@ -423,6 +431,7 @@ function ensureFm(){
   Object.keys(FM).forEach(function(k){
     if(!state.lineup.fm[k]) state.lineup.fm[k]={s:{},next:'L1'};
     if(!state.lineup.fm[k].s) state.lineup.fm[k].s={};
+    if(!Array.isArray(state.lineup.fm[k].from)) state.lineup.fm[k].from=[];
     // "Danach": 1./2./3. Reihe oder Alternative Aufstellung
     if(k!=='ALT' && ['L1','L2','L3','ALT'].indexOf(state.lineup.fm[k].next)===-1) state.lineup.fm[k].next='L1';
   });
@@ -549,7 +558,7 @@ function renderPhase(){
     else{btn.textContent='Spiel beenden';}
   } else {btn.textContent='Zurück zur Pause'; btn.className='phase-btn'; label='Spiel beendet';}
   document.getElementById('tb-period').textContent=label;
-  updateTopbar(); updateMinuteCaption(); updateJerseyButtons(); renderSummary(); updateSmPolling(); renderPrepExtras();
+  updateTopbar(); updateMinuteCaption(); updateJerseyButtons(); renderSummary(); updateSmPolling(); renderPrepExtras(); updateFmButtons();
 }
 var confirmEndTimer=null;
 function phaseMain(){
@@ -619,7 +628,7 @@ function prepSummaryHtml(){
   ensureFm();
   Object.keys(FM).forEach(function(k){
     var names=[]; for(var i=1;i<=FM[k].n;i++){var pid=state.lineup.fm[k].s[i]; names.push(FM[k].names[i]+': '+(pid!=null?nm(pid):'–'));}
-    h+='<tr><td>'+FM[k].title+'</td><td>'+names.join(' · ')+(k==='ALT'?'':'<br><span class="muted">Danach: '+(nextLabel(state.lineup.fm[k].next)||'–')+'</span>')+'</td></tr>';
+    h+='<tr><td>'+esc(fmFull(k))+'</td><td>'+names.join(' · ')+(k==='ALT'?'':'<br><span class="muted">Danach: '+(nextLabel(state.lineup.fm[k].next)||'–')+'</span>')+'</td></tr>';
   });
   h+='</table>';
   if(empty) h+='<p class="muted" style="margin:8px 0 0;">'+empty+' von 15 Plätzen sind leer. Das ist in Ordnung, wenn weniger Reihen spielen.</p>';
@@ -852,6 +861,34 @@ function updateSmPolling(){
   if(!on&&smPollTimer){clearInterval(smPollTimer); smPollTimer=null;}
 }
 /* ---------- Sonderformationen: Überzahl, Unterzahl 1/2 (zum Ansagen) ---------- */
+var fmEditing='';
+function fmName(key){ensureFm(); var c=state.lineup.fm[key]; return (c.label&&c.label.trim())||FM[key].title;}
+function fmFull(key){ensureFm(); var fr=(state.lineup.fm[key].from||[]).slice().sort(); return fmName(key)+(fr.length?' · aus Reihe '+fr.join('+'):'');}
+function fmCardHead(key){
+  var h='<p class="line-title">';
+  if(fmEditing===key){
+    h+='<input type="text" id="fm-label-input" value="'+esc(state.lineup.fm[key].label||'')+'" placeholder="'+esc(FM[key].title)+'" maxlength="30" onkeydown="if(event.key===\'Enter\') saveFmLabel(\''+key+'\')" style="min-height:36px; width:55%;"> '+
+       '<button type="button" class="fm-pencil" onclick="saveFmLabel(\''+key+'\')">OK</button> '+
+       '<button type="button" class="fm-pencil" onclick="resetFmLabel(\''+key+'\')" title="Standardname">↺</button>';
+  } else h+=esc(fmName(key))+' <button type="button" class="fm-pencil" onclick="editFmLabel(\''+key+'\')" aria-label="Bezeichnung ändern">✎</button>';
+  return h+' <span class="fm-sub">('+FM[key].n+' Feldspieler + Torwart)</span></p>';
+}
+function editFmLabel(key){fmEditing=key; renderLineup(); var i=document.getElementById('fm-label-input'); if(i){i.focus(); i.select();}}
+function saveFmLabel(key){var i=document.getElementById('fm-label-input'); state.lineup.fm[key].label=i?i.value.trim():''; fmEditing=''; save(); renderLineup();}
+function resetFmLabel(key){state.lineup.fm[key].label=''; fmEditing=''; save(); renderLineup();}
+function fmFromHtml(key){
+  var fr=state.lineup.fm[key].from||[];
+  return '<div class="fm-next"><span>Spieler aus Reihe:</span>'+[1,2,3].map(function(n){
+    return '<button type="button" class="'+(fr.indexOf(n)!==-1?'active':'')+'" onclick="toggleFmFrom(\''+key+'\','+n+')">'+n+'</button>';
+  }).join('')+'</div>';
+}
+function toggleFmFrom(key,n){
+  ensureFm(); var fr=state.lineup.fm[key].from, i=fr.indexOf(n);
+  if(i===-1) fr.push(n); else fr.splice(i,1);
+  fr.sort(); save(); renderLineup();
+}
+// Beschriftung der Formations-Knöpfe im Spiel
+function updateFmButtons(){['PP','U1','U2'].forEach(function(k){var b=document.getElementById('fm-btn-'+k); if(b) b.textContent=fmName(k);});}
 function nextLabel(val){return {L1:'1. Reihe',L2:'2. Reihe',L3:'3. Reihe',ALT:'Alternative Aufstellung',PP:'Überzahl',U1:'Unterzahl 1',U2:'Unterzahl 2'}[val]||'';}
 function fmFieldHtml(key,modal,altMode){
   ensureFm();
@@ -928,7 +965,7 @@ function showFormation(key){
     else body+=' <button type="button" style="margin-left:8px;" onclick="showFormation(\''+nx+'\')">Anzeigen ›</button>';
     body+='</div>';
   } else body+='<p class="muted" style="margin-top:8px;">Kein "Danach" festgelegt.</p>';
-  document.getElementById('fm-title').textContent=f.title;
+  document.getElementById('fm-title').textContent=fmFull(key);
   document.getElementById('fm-body').innerHTML=body;
   document.getElementById('fm-modal').style.display='block';
 }
@@ -1303,7 +1340,7 @@ function availableForSlot(slot){
 }
 function getSlotValue(slot){if(isFm(slot.line)){ensureFm(); var fv=state.lineup.fm[slot.line].s[slot.pos]; return fv==null?null:fv;} return slot.line==='G'?state.lineup.goalie:(slot.line==='X'?state.lineup.extra:state.lineup.lines[slot.line][slot.pos]);}
 function setSlotValue(slot,val){if(isFm(slot.line)){ensureFm(); if(val==null) delete state.lineup.fm[slot.line].s[slot.pos]; else state.lineup.fm[slot.line].s[slot.pos]=val; return;} if(slot.line==='G')state.lineup.goalie=val; else if(slot.line==='X')state.lineup.extra=val; else state.lineup.lines[slot.line][slot.pos]=val;}
-function slotLabel(slot){if(isFm(slot.line)) return FM[slot.line].title+' – '+(FM[slot.line].names[slot.pos]||('Position '+slot.pos)); return slot.line==='G'?'Goalie':(slot.line==='X'?'6. Feldspieler (Empty Net)':(slot.line+1)+'. Reihe – '+POS_LABELS[slot.pos]);}
+function slotLabel(slot){if(isFm(slot.line)) return fmName(slot.line)+' – '+(FM[slot.line].names[slot.pos]||('Position '+slot.pos)); return slot.line==='G'?'Goalie':(slot.line==='X'?'6. Feldspieler (Empty Net)':(slot.line+1)+'. Reihe – '+POS_LABELS[slot.pos]);}
 
 function slotClick(lineIdx,pos){selectedSlot={line:lineIdx,pos:pos}; renderLineup(); renderSlotPanel();}
 function renderSlotPanel(){
@@ -1434,9 +1471,10 @@ function renderLineup(){
   ensureFm();
   Object.keys(FM).forEach(function(k){
     if(k==='ALT') return; // Alternative Aufstellung wird über den Knopf bei "Danach" eingegeben
-    html+='<div class="line-card"><p class="line-title">'+FM[k].title+' ('+FM[k].n+' Feldspieler + Torwart)</p>'+fmFieldHtml(k,false)+(k==='ALT'?'':fmNextHtml(k))+'</div>';
+    html+='<div class="line-card">'+fmCardHead(k)+fmFromHtml(k)+fmFieldHtml(k,false)+fmNextHtml(k)+'</div>';
   });
   el.innerHTML=html;
+  updateFmButtons();
   var bench=availableForSlot(null);
   var bi=document.getElementById('bench-info');
   bi.setAttribute('ondragover','dragOverHandler(event)');
