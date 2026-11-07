@@ -1166,7 +1166,6 @@ function pickGame(id){
   state.game={id:g.id, date:g.date, time:g.time, arena:g.arena, address:g.address, home:g.home, guest:g.guest, isHome:!!g.isHome, opponent:g.opponent};
   state.teamOpp=g.opponent;
   document.getElementById('team-opp').value=g.opponent;
-  state.jersey=g.isHome?'blau':'weiss'; applyJersey(); updateJerseyButtons();
   save(); renderStats(); renderGameInfo(); renderGames(); renderRosterAll();
   showToast('Spiel gewählt: '+g.opponent);
 }
