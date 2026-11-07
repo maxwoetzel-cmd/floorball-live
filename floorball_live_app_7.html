@@ -122,6 +122,10 @@
     body.phase-play #play-layout{display:grid; grid-template-columns:minmax(360px,1.05fr) minmax(380px,1fr); gap:12px; align-items:start;}
     body.phase-play .col-left{position:sticky; top:84px;}
   }
+  .sum-fields{display:flex; flex-wrap:wrap; gap:12px;}
+  .sum-fields > div{flex:1 1 280px; max-width:440px;}
+  #summary-body table{margin-top:4px;}
+  #summary-body td:not(:first-child), #summary-body th:not(:first-child){text-align:center;}
 </style>
 </head>
 <body>
@@ -149,6 +153,11 @@
   </div>
 </div>
 
+<section id="sec-summary" data-ph="break end">
+  <h2 id="summary-title">Auswertung</h2>
+  <div id="summary-body"></div>
+</section>
+
 <section id="sec-game" data-ph="prep">
   <h2>1 · Spiel</h2>
   <div class="row" style="margin-bottom:10px;">
@@ -162,8 +171,8 @@
     </div>
   </div>
   <div class="seg" id="jersey-seg" style="margin-bottom:10px;">
-    <button type="button" data-j="weiss" onclick="setJersey('weiss')">Trikot weiß</button>
-    <button type="button" data-j="blau" onclick="setJersey('blau')">Trikot blau</button>
+    <button type="button" data-j="blau" onclick="setJersey('blau')">Trikot blau (Heim)</button>
+    <button type="button" data-j="weiss" onclick="setJersey('weiss')">Trikot weiß (Auswärts)</button>
   </div>
   <div class="web-only">
     <p class="muted" id="sm-current" style="margin:0 0 8px;"></p>
@@ -270,7 +279,7 @@
       </div>
     </section>
 
-    <section id="sec-stats" data-ph="play break end">
+    <section id="sec-stats" data-ph="play">
       <h2>Statistik <button type="button" class="toggle-btn" onclick="toggleSection('sec-stats')">anzeigen ▾</button></h2>
       <div class="sec-body">
         <div id="stats-total"></div>
@@ -285,7 +294,7 @@
       </div>
     </section>
 
-    <section id="sec-playtimes" data-ph="break end">
+    <section id="sec-playtimes" data-ph="none">
       <h2>Spielzeiten und Plus/Minus <span id="playtime-period-badge" style="color:var(--wir); font-weight:700;"></span></h2>
       <div class="roster-row" style="border-top:none; grid-template-columns:40px 1fr 64px 48px 40px;">
         <span class="muted">Nr</span><span class="muted">Name</span><span class="muted">Status</span><span class="muted">Min</span><span class="muted">+/-</span>
@@ -321,7 +330,7 @@ function emptyLineup(){return {goalie:null, extra:null, lines:[emptyLine(),empty
 
 var state={
   teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir',
-  pendingZone:null, minute:0, game:null, phase:'prep', emptyNet:false, jersey:'weiss', shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(),
+  pendingZone:null, minute:0, game:null, phase:'prep', emptyNet:false, jersey:'blau', shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(),
   nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1
 };
 var selectedSlot=null;
@@ -342,7 +351,7 @@ function load(){
     state.pendingZone=null; // halbfertige Schuss-Auswahl nicht über einen Reload mitnehmen
     state.minute=parseInt(state.minute)||0;
     state.emptyNet=!!state.emptyNet;
-    if(!state.jersey) state.jersey='weiss';
+    if(!state.jersey) state.jersey='blau';
     if(!state.phase) state.phase=(state.shots.length||state.specials.length||state.bullies.length)?'play':'prep'; // Stand aus früherer Version
   }catch(e){}
 }
@@ -374,20 +383,21 @@ function isLive(){return state.phase==='play';}
 function computeScore(){var r={Wir:0,Gegner:0}; state.shots.forEach(function(x){if(x.outcome==='Tor') r[x.team]++;}); return r;}
 function zoneLabel(z){
   var m=String(z).split('-');
-  var r={tornah:'Kurzdistanz',zentral:'Mitteldistanz',fern:'Langdistanz'}[m[0]]||m[0];
+  if(m[0]==='zentral') return {links:'linke Tasche (Halbfeld)',mitte:'zentrales Halbfeld',rechts:'rechte Tasche (Halbfeld)'}[m[1]]||'Halbfeld';
+  var r={tornah:'Kurzdistanz',fern:'Langdistanz'}[m[0]]||m[0];
   var c={links:'links',mitte:'Mitte',rechts:'rechts'}[m[1]]||m[1];
   return r+' · '+c;
 }
 // Beschriftung der drei Zonenreihen direkt auf dem Spielfeld
-function zoneRowLabels(){
-  var names={tornah:'Kurzdistanz',zentral:'Mitteldistanz',fern:'Langdistanz'};
-  return currentRows().map(function(r){
+function zoneRowLabels(rows){
+  var names={tornah:'Kurzdistanz',zentral:'Halbfeld',fern:'Langdistanz'};
+  return (rows||currentRows()).map(function(r){
     return '<text x="20" y="'+(r.y+24)+'" font-size="14" fill="rgba(255,255,255,0.6)" style="pointer-events:none">'+names[r.key]+'</text>';
   }).join('');
 }
 // Trikotfarbe: manche Spieler tragen je nach Trikotsatz (blau/weiß) eine andere Nummer
-function updateJerseyButtons(){document.querySelectorAll('#jersey-seg button').forEach(function(b){b.classList.toggle('active', b.dataset.j===(state.jersey||'weiss'));});}
-function jerseyNr(r){return state.jersey==='blau'?(r.nrBlau||r.nrWeiss||r.nr||''):(r.nrWeiss||r.nrBlau||r.nr||'');}
+function updateJerseyButtons(){document.querySelectorAll('#jersey-seg button').forEach(function(b){b.classList.toggle('active', b.dataset.j===(state.jersey||'blau'));});}
+function jerseyNr(r){return (state.jersey||'blau')==='blau'?(r.nrBlau||r.nrWeiss||r.nr||''):(r.nrWeiss||r.nrBlau||r.nr||'');}
 function applyJersey(){state.roster.forEach(function(r){if(r.nrBlau||r.nrWeiss) r.nr=String(jerseyNr(r));});}
 function setJersey(j){state.jersey=j; applyJersey(); save(); renderRosterAll(); updateJerseyButtons();}
 function setJerseyNumbers(r,p){
@@ -398,7 +408,7 @@ function setJerseyNumbers(r,p){
 function setLineupNr(r,nr){
   if(nr==null||nr==='') return;
   nr=String(nr); r.nr=nr;
-  if(state.jersey==='blau') r.nrBlau=nr; else r.nrWeiss=nr;
+  if((state.jersey||'blau')==='blau') r.nrBlau=nr; else r.nrWeiss=nr;
   if(!r.nrBlau) r.nrBlau=nr;
   if(!r.nrWeiss) r.nrWeiss=nr;
 }
@@ -425,7 +435,7 @@ function renderPhase(){
     else{btn.textContent='Spiel beenden';}
   } else {btn.textContent='Zurück zur Pause'; btn.className='phase-btn'; label='Spiel beendet';}
   document.getElementById('tb-period').textContent=label;
-  updateTopbar(); updateMinuteCaption(); updateJerseyButtons();
+  updateTopbar(); updateMinuteCaption(); updateJerseyButtons(); renderSummary();
 }
 var confirmEndTimer=null;
 function phaseMain(){
@@ -461,6 +471,110 @@ function endPeriod(){
 function endGame(){
   if(state.phase==='play') endPeriod();
   state.phase='end'; save(); renderAll(); showToast('Spiel beendet');
+}
+/* ---------- Auswertung je Drittel (Pause) und Gesamtauswertung (Spielende) ---------- */
+function shotsOf(period){return state.shots.filter(function(s){return !period||s.period===period;});}
+function teamTotals(shots){
+  var t={Wir:{s:0,a:0,g:0},Gegner:{s:0,a:0,g:0}};
+  shots.forEach(function(x){var q=t[x.team]; q.s++; if(x.outcome==='Tor'){q.g++; q.a++;} else if(x.outcome==='Aufs Tor') q.a++;});
+  return t;
+}
+function fmtPm(v){v=v||0; return (v>0?'+':'')+v;}
+// Torhüter: "Aufs Tor" zählt als gehalten, "Tor" als Gegentor
+function goalieTableHtml(shots){
+  var per={};
+  shots.forEach(function(sh){
+    if(sh.team!=='Gegner') return;
+    var k=sh.emptyNet?'EN':(sh.goalieId==null?'?':sh.goalieId);
+    if(!per[k]) per[k]={saves:0,goals:0};
+    if(sh.outcome==='Aufs Tor') per[k].saves++; else if(sh.outcome==='Tor') per[k].goals++;
+  });
+  var rows=Object.keys(per).map(function(k){
+    var p=(k==='?'||k==='EN')?null:playerById(parseInt(k));
+    var name=p?playerLabel(p):(k==='EN'?'Ohne Torwart (Empty Net)':'Kein Torwart zugeordnet');
+    var a=per[k].saves, b=per[k].goals, faced=a+b;
+    return '<tr><td>'+esc(name)+'</td><td>'+a+'</td><td>'+b+'</td><td>'+(faced?Math.round(a/faced*100)+'%':'–')+'</td></tr>';
+  }).join('');
+  return '<table><tr><th>Torhüter</th><th>Gehalten</th><th>Gegentore</th><th>Quote</th></tr>'+(rows||'<tr><td colspan="4" class="muted">Keine Schüsse aufs Tor.</td></tr>')+'</table>';
+}
+// Schussbild einer Mannschaft (Offense = unsere Schüsse, Defense = Schüsse des Gegners) mit Anzahl je Zone
+function fieldSummarySvg(team,shots){
+  var orientation=team==='Wir'?'offense':'defense', rows=team==='Wir'?ZONE_ROWS_OFF:ZONE_ROWS_DEF;
+  var mine=shots.filter(function(x){return x.team===team;}), counts={}, parts=[fieldBaseSvg(orientation), zoneRowLabels(rows)];
+  mine.forEach(function(x){var c=counts[x.zone]||(counts[x.zone]={n:0,g:0}); c.n++; if(x.outcome==='Tor') c.g++;});
+  mine.forEach(function(x){
+    var z=x.zone.split('-'), col=ZONE_COLS.find(function(c){return c.key===z[1];}), rw=rows.find(function(r){return r.key===z[0];});
+    if(!col||!rw) return;
+    var cx=col.x+col.w/2+jitter(x.id,80), cy=rw.y+rw.h/2+jitter(x.id+0.5,80), col2=teamColor[team];
+    var fill=x.outcome==='Daneben'?'none':col2, op=x.outcome==='Aufs Tor'?' fill-opacity="0.4"':'';
+    parts.push('<circle cx="'+cx+'" cy="'+cy+'" r="'+(x.outcome==='Tor'?10:7)+'" stroke="'+col2+'" stroke-width="2.5" fill="'+fill+'"'+op+'></circle>');
+  });
+  rows.forEach(function(rw){ZONE_COLS.forEach(function(col){
+    var c=counts[rw.key+'-'+col.key]; if(!c) return;
+    parts.push('<text x="'+(col.x+8)+'" y="'+(rw.y+rw.h-10)+'" font-size="15" font-weight="700" fill="#fff" stroke="#14181b" stroke-width="3" paint-order="stroke">'+c.n+(c.n===1?' Schuss':' Schüsse')+(c.g?', '+c.g+(c.g===1?' Tor':' Tore'):'')+'</text>');
+  });});
+  return '<svg class="field-svg" viewBox="0 0 440 470" xmlns="http://www.w3.org/2000/svg">'+parts.join('')+'</svg>';
+}
+function fieldsHtml(shots){
+  return '<div class="sum-fields"><div><p class="muted">Offense – Schüsse von '+esc(usName())+'</p>'+fieldSummarySvg('Wir',shots)+'</div>'+
+    '<div><p class="muted">Defense – Schüsse von '+esc(oppName())+'</p>'+fieldSummarySvg('Gegner',shots)+'</div></div>';
+}
+function playtimeTableHtml(period){
+  var idx=PERIODS.indexOf(state.period), plist=period?[period]:PERIODS.slice(0,idx+1);
+  var pmAll=computePlusMinus(), pmP=period?computePlusMinus(period):null;
+  var list=sortedRoster().filter(function(p){return p.present||p.events.length;});
+  var head='<tr><th>Nr</th><th>Name</th>'+(period
+    ?'<th>Min Drittel</th><th>Min gesamt</th><th>+/- Drittel</th><th>+/- gesamt</th>'
+    :plist.map(function(x){return '<th>'+esc(x.replace('. Drittel','.'))+'</th>';}).join('')+'<th>Gesamt</th><th>+/-</th>')+'</tr>';
+  var rows=list.map(function(p){
+    var cells;
+    if(period) cells='<td>'+Math.round(computePlayerMinutes(p,period))+'</td><td>'+Math.round(computePlayerMinutes(p))+'</td><td>'+fmtPm(pmP[p.id])+'</td><td>'+fmtPm(pmAll[p.id])+'</td>';
+    else cells=plist.map(function(x){return '<td>'+Math.round(computePlayerMinutes(p,x))+'</td>';}).join('')+'<td>'+Math.round(computePlayerMinutes(p))+'</td><td>'+fmtPm(pmAll[p.id])+'</td>';
+    return '<tr><td>'+esc(p.nr||'')+'</td><td>'+esc(p.name||'')+(p.isGoalie?' (T)':'')+'</td>'+cells+'</tr>';
+  }).join('');
+  return '<table>'+head+(rows||'<tr><td colspan="6" class="muted">Keine Spieler.</td></tr>')+'</table>';
+}
+function miniStatsHtml(period){
+  var b=state.bullies.filter(function(x){return !period||x.period===period;}), w=b.filter(function(x){return x.won;}).length;
+  var sp=state.specials.filter(function(x){return !period||x.period===period;});
+  function agg(type){var a={n:0,ok:0,gf:0,ga:0}; sp.forEach(function(x){if(x.type!==type) return; a.n++; if(x.success===true) a.ok++; a.gf+=x.goalsFor||0; a.ga+=x.goalsAgainst||0;}); return a;}
+  function row(l,a){return '<tr><td>'+l+'</td><td>'+a.n+'</td><td>'+a.ok+'</td><td>'+a.gf+'</td><td>'+a.ga+'</td></tr>';}
+  var en=shotsOf(period).filter(function(x){return x.emptyNet;});
+  var enU=en.filter(function(x){return x.team==='Wir';}), enG=en.filter(function(x){return x.team==='Gegner';});
+  function goals(l){return l.filter(function(x){return x.outcome==='Tor';}).length;}
+  return '<table><tr><th></th><th>Anzahl</th><th>Erfolgreich</th><th>Tore</th><th>Gegentore</th></tr>'+row('Überzahl',agg('Überzahl'))+row('Unterzahl',agg('Unterzahl'))+'</table>'+
+    '<p class="muted" style="margin:8px 0 0;">Bullys: '+w+' gewonnen, '+(b.length-w)+' verloren'+(b.length?' ('+Math.round(w/b.length*100)+'%)':'')+
+    (en.length?' · Empty Net: wir '+enU.length+' Schüsse ('+goals(enU)+' Tore), Gegner '+enG.length+' ('+goals(enG)+' Tore)':'')+'</p>';
+}
+function summaryHtml(period){
+  var shots=shotsOf(period), t=teamTotals(shots), us=esc(usName()), opp=esc(oppName()), h='';
+  h+='<table><tr><th></th><th>'+us+'</th><th>'+opp+'</th></tr>'+
+     '<tr><td>Tore</td><td><b>'+t.Wir.g+'</b></td><td><b>'+t.Gegner.g+'</b></td></tr>'+
+     '<tr><td>Schüsse</td><td>'+t.Wir.s+'</td><td>'+t.Gegner.s+'</td></tr>'+
+     '<tr><td>aufs Tor (inkl. Tore)</td><td>'+t.Wir.a+'</td><td>'+t.Gegner.a+'</td></tr></table>';
+  var idx=PERIODS.indexOf(state.period);
+  if(!period){
+    var rows=PERIODS.slice(0,idx+1).map(function(p){var q=teamTotals(shotsOf(p)); return '<tr><td>'+esc(p)+'</td><td>'+q.Wir.g+' : '+q.Gegner.g+'</td><td>'+q.Wir.s+' : '+q.Gegner.s+'</td></tr>';}).join('');
+    h+='<h3 style="margin-top:14px;">Je Drittel</h3><table><tr><th>Drittel</th><th>Tore</th><th>Schüsse</th></tr>'+rows+'</table>';
+  }
+  h+='<h3 style="margin-top:14px;">Torhüter'+(period?'':' (gesamt)')+'</h3>'+goalieTableHtml(shots);
+  h+='<h3 style="margin-top:14px;">Schussbilder'+(period?'':' (gesamt)')+'</h3>'+fieldsHtml(shots);
+  if(!period){
+    PERIODS.slice(0,idx+1).forEach(function(p){
+      if(!shotsOf(p).length) return;
+      h+='<details style="margin-top:8px;"><summary style="cursor:pointer; padding:6px 0; color:var(--text-secondary);">Schussbilder '+esc(p)+'</summary>'+fieldsHtml(shotsOf(p))+goalieTableHtml(shotsOf(p))+'</details>';
+    });
+  }
+  h+='<h3 style="margin-top:14px;">Spielzeiten (Minuten) und Plus/Minus</h3>'+playtimeTableHtml(period);
+  h+='<h3 style="margin-top:14px;">Über-/Unterzahl und Bully</h3>'+miniStatsHtml(period);
+  return h;
+}
+function renderSummary(){
+  var el=document.getElementById('summary-body'), ti=document.getElementById('summary-title'); if(!el) return;
+  var ph=state.phase;
+  if(ph==='break'){ti.textContent=state.period+' – Auswertung'; el.innerHTML=summaryHtml(state.period);}
+  else if(ph==='end'){ti.textContent='Gesamtauswertung'; el.innerHTML=summaryHtml(null);}
+  else el.innerHTML='';
 }
 function toggleEmptyNet(){
   if(!isLive()){showToast('Nur im laufenden Drittel'); return;}
@@ -671,7 +785,7 @@ function renderStats(){
   }).join('');
   document.getElementById('stats-zone-table').innerHTML=
     '<tr><th>Schüsse je Zone</th><th>'+usName()+'</th><th>'+oppName()+'</th></tr>'+(zRows||'<tr><td colspan="3" class="muted">Noch keine Schüsse.</td></tr>');
-  renderGoalieStats(); updateTopbar();
+  renderGoalieStats(); updateTopbar(); renderSummary();
 }
 function renderGoalieStats(){
   var per={};
@@ -760,7 +874,7 @@ function updatePlayerField(id,field,value){
   var p=playerById(id); if(!p)return;
   if(field==='isCaptain'||field==='isGoalie') value=!!value;
   p[field]=value;
-  if(field==='nr'){if(state.jersey==='blau') p.nrBlau=value; else p.nrWeiss=value;}
+  if(field==='nr'){if((state.jersey||'blau')==='blau') p.nrBlau=value; else p.nrWeiss=value;}
   if(field==='isGoalie'&&value) p.pos='';
   save();
   // Bei Texteingabe (Nr/Name) die Bearbeitungsliste nicht neu zeichnen, sonst verliert das Feld den Fokus
@@ -944,11 +1058,12 @@ function renderLineup(){
                   : '<p class="muted">Keine – alle Anwesenden sind aufgestellt. Spieler hierher ziehen, um sie aus der Aufstellung zu nehmen.</p>');
 }
 
-function computePlayerMinutes(p){
+function computePlayerMinutes(p,only){
   var byPeriod={};
   p.events.forEach(function(e){(byPeriod[e.period]=byPeriod[e.period]||[]).push(e);});
   var total=0;
   Object.keys(byPeriod).forEach(function(per){
+    if(only&&per!==only) return;
     var evs=byPeriod[per].slice().sort(function(a,b){return a.minute-b.minute;}), openStart=null;
     evs.forEach(function(e){
       if(e.action==='ein') openStart=e.minute;
@@ -960,10 +1075,10 @@ function computePlayerMinutes(p){
   });
   return total;
 }
-function computePlusMinus(){
+function computePlusMinus(only){
   var pm={};
   state.shots.forEach(function(s){
-    if(s.outcome!=='Tor'||!Array.isArray(s.onFieldIds)) return;
+    if(s.outcome!=='Tor'||!Array.isArray(s.onFieldIds)||(only&&s.period!==only)) return;
     var delta=s.team==='Wir'?1:-1;
     s.onFieldIds.forEach(function(id){pm[id]=(pm[id]||0)+delta;});
   });
@@ -1051,7 +1166,8 @@ function pickGame(id){
   state.game={id:g.id, date:g.date, time:g.time, arena:g.arena, address:g.address, home:g.home, guest:g.guest, isHome:!!g.isHome, opponent:g.opponent};
   state.teamOpp=g.opponent;
   document.getElementById('team-opp').value=g.opponent;
-  save(); renderStats(); renderGameInfo(); renderGames();
+  state.jersey=g.isHome?'blau':'weiss'; applyJersey(); updateJerseyButtons();
+  save(); renderStats(); renderGameInfo(); renderGames(); renderRosterAll();
   showToast('Spiel gewählt: '+g.opponent);
 }
 // ---- Kader: Stammkader (Drive, kader.json) und Saisonmanager ----
@@ -1254,7 +1370,7 @@ function importData(evt){
 }
 function applyImported(imported){
     try{
-      state=Object.assign({teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, game:null, phase:'', emptyNet:false, jersey:'weiss', shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1}, imported);
+      state=Object.assign({teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, game:null, phase:'', emptyNet:false, jersey:'blau', shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1}, imported);
       state.pendingZone=null;
       if(!state.phase) state.phase=hasGameData()?'play':'prep';
       if(!Array.isArray(state.specials)) state.specials=[];
@@ -1287,7 +1403,7 @@ function newGame(btn){
     (backedUp ? exportData() : Promise.resolve(true)).then(function(ok){
       if(!ok){showToast('Abgebrochen – Stand nicht gesichert, nichts gelöscht'); return;}
       var keepRoster=state.roster.map(function(p){return {id:p.id, nr:p.nr, name:p.name, isCaptain:!!p.isCaptain, isGoalie:!!p.isGoalie, pos:p.pos||'', present:false, onField:false, events:[], smId:p.smId, first:p.first, last:p.last, nrBlau:p.nrBlau, nrWeiss:p.nrWeiss};});
-      state={teamUs:state.teamUs, teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, game:null, phase:'prep', emptyNet:false, jersey:state.jersey||'weiss', shots:[], specials:[], bullies:[], roster:keepRoster, lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:state.nextPlayerId};
+      state={teamUs:state.teamUs, teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, game:null, phase:'prep', emptyNet:false, jersey:'blau', shots:[], specials:[], bullies:[], roster:keepRoster, lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:state.nextPlayerId};
       selectedSlot=null;
       save();
       document.getElementById('current-minute').value=0; syncControlsFromState(); renderAll();
