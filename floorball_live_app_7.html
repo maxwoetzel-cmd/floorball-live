@@ -437,7 +437,7 @@ var FM={
   ALT:{title:'Alternative Aufstellung', n:5, kind:'line', names:{1:'Offense links', 2:'Center', 3:'Offense rechts', 4:'Defense links', 5:'Defense rechts'}}
 };
 // Lage der Positionen in Prozent (nach den Skizzen: Überzahl mit Tor oben, Unterzahl mit Tor unten)
-var FM_POS={pp:{1:[16,36],2:[16,88],3:[50,62],4:[84,72],5:[52,90]}, uz:{1:[63,50],2:[37,50],3:[50,30],4:[58,11]}, line:{1:[18,34],2:[50,58],3:[82,34],4:[32,82],5:[68,82]}};
+var FM_POS={pp:{1:[16,36],2:[16,88],3:[50,62],4:[84,72],5:[52,90]}, uz:{1:[63,67],2:[37,67],3:[50,42],4:[58,15]}, line:{1:[18,20],2:[50,38],3:[82,20],4:[32,74],5:[68,74]}};
 function newFm(){return {PP:{s:{},next:'L1'}, U1:{s:{},next:'L1'}, U2:{s:{},next:'L1'}, ALT:{s:{},next:''}};}
 function isFm(line){return line==='PP'||line==='U1'||line==='U2'||line==='ALT';}
 function emptyLineup(){return {goalie:null, extra:null, lines:[emptyLine(),emptyLine(),emptyLine()], fm:newFm()};}
@@ -1094,16 +1094,20 @@ function setTeam(btn){
 function currentRows(){return state.currentTeam==='Wir'?ZONE_ROWS_OFF:ZONE_ROWS_DEF;}
 
 // Spielfeld-Ausschnitt fuer Ueberzahl/Unterzahl/Alternative. Massstab: 20 m Feldbreite = 400 Einheiten (20 je Meter).
-// Torraum 5 x 4 m, Torwartraum 2,5 x 1 m, Tor 1,6 m, Torlinie 2,85 m vor der Bande. Der Ausschnitt ist offen (zur Mitte hin abgeschnitten).
+// Nach Vorlage: Tor mit Netz direkt an der Bande, darunter ein flaches Torraum-Rechteck (ca. 2,4 : 1), Tor halb so breit.
+// Der Ausschnitt ist offen (zur Mitte hin abgeschnitten).
 var LF_DIM={pp:[400,330], line:[400,300], uz:[400,340]};
 function fieldBgSvg(kind){
   var d=LF_DIM[kind], w=d[0], h=d[1], top=(kind!=='uz'), S='stroke="#fff" fill="none"', p=[];
-  var gl=top?61:h-61, cx=w/2, dir=top?1:-1; // Torlinie, Mitte, Richtung ins Feld
-  function box(bw,bd){return '<rect x="'+(cx-bw/2)+'" y="'+(top?gl:gl-bd)+'" width="'+bw+'" height="'+bd+'" '+S+' stroke-width="2.5"></rect>';}
+  var cx=w/2, GW=50, GH=22, BW=100, BH=42; // Tor (Breite/Tiefe), Torraum (Breite/Tiefe)
+  var gy=top?4:h-4-GH, by=top?4+GH:h-4-GH-BH; // oberste Kante von Tor und Torraum
   p.push(top?'<path d="M4 '+h+'V28Q4 4 28 4H'+(w-28)+'Q'+(w-4)+' 4 '+(w-4)+' 28V'+h+'" '+S+' stroke-width="3"></path>'
             :'<path d="M4 0V'+(h-28)+'Q4 '+(h-4)+' 28 '+(h-4)+'H'+(w-28)+'Q'+(w-4)+' '+(h-4)+' '+(w-4)+' '+(h-28)+'V0" '+S+' stroke-width="3"></path>');
-  p.push(box(100,80), box(50,20));
-  p.push('<rect x="'+(cx-16)+'" y="'+(top?gl-23:gl)+'" width="32" height="23" '+S+' stroke-width="3"></rect>');
+  p.push('<rect x="'+(cx-BW/2)+'" y="'+by+'" width="'+BW+'" height="'+BH+'" '+S+' stroke-width="2.5"></rect>');
+  // Netz: feines Gitter im Tor
+  for(var x=cx-GW/2+6;x<cx+GW/2;x+=6) p.push('<line x1="'+x+'" y1="'+gy+'" x2="'+x+'" y2="'+(gy+GH)+'" stroke="#fff" stroke-opacity="0.65" stroke-width="1"></line>');
+  for(var y=gy+5;y<gy+GH;y+=5) p.push('<line x1="'+(cx-GW/2)+'" y1="'+y+'" x2="'+(cx+GW/2)+'" y2="'+y+'" stroke="#fff" stroke-opacity="0.65" stroke-width="1"></line>');
+  p.push('<rect x="'+(cx-GW/2)+'" y="'+gy+'" width="'+GW+'" height="'+GH+'" '+S+' stroke-width="2.5"></rect>');
   return '<svg class="fm-bg" viewBox="0 0 '+w+' '+h+'" xmlns="http://www.w3.org/2000/svg">'+p.join('')+'</svg>';
 }
 function fieldBaseSvg(orientation){
