@@ -437,7 +437,7 @@ var FM={
   ALT:{title:'Alternative Aufstellung', n:5, kind:'line', names:{1:'Offense links', 2:'Center', 3:'Offense rechts', 4:'Defense links', 5:'Defense rechts'}}
 };
 // Lage der Positionen in Prozent (nach den Skizzen: Überzahl mit Tor oben, Unterzahl mit Tor unten)
-var FM_POS={pp:{1:[16,36],2:[16,88],3:[50,62],4:[84,63],5:[52,90]}, uz:{1:[63,50],2:[37,50],3:[50,30],4:[58,11]}, line:{1:[18,34],2:[50,58],3:[82,34],4:[32,82],5:[68,82]}};
+var FM_POS={pp:{1:[16,36],2:[16,88],3:[50,62],4:[84,72],5:[52,90]}, uz:{1:[63,50],2:[37,50],3:[50,30],4:[58,11]}, line:{1:[18,34],2:[50,58],3:[82,34],4:[32,82],5:[68,82]}};
 function newFm(){return {PP:{s:{},next:'L1'}, U1:{s:{},next:'L1'}, U2:{s:{},next:'L1'}, ALT:{s:{},next:''}};}
 function isFm(line){return line==='PP'||line==='U1'||line==='U2'||line==='ALT';}
 function emptyLineup(){return {goalie:null, extra:null, lines:[emptyLine(),emptyLine(),emptyLine()], fm:newFm()};}
