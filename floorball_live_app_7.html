@@ -187,7 +187,7 @@
   </div>
 </section>
 
-<section id="sec-roster" data-ph="prep break">
+<section id="sec-roster" data-ph="prep">
   <h2>2 · Kader</h2>
   <div class="web-only">
     <div class="row">
@@ -210,7 +210,7 @@
   </details>
 </section>
 
-<section id="sec-present" data-ph="prep break">
+<section id="sec-present" data-ph="prep">
   <h2>3 · Wer ist dabei?</h2>
   <button type="button" class="web-only" onclick="loadSmLineup()" style="width:100%; margin-bottom:8px;">Aufstellung dieses Spiels aus dem Saisonmanager übernehmen</button>
   <p class="muted" id="present-info" style="margin:0 0 4px;"></p>
@@ -263,6 +263,7 @@
         <button type="button" id="en-btn" onclick="toggleEmptyNet()" style="flex:1;">Torwart raus (Empty Net)</button>
         <button type="button" onclick="undoLastShot()" style="flex:1;">Letzten Schuss löschen</button>
       </div>
+      <p class="muted" id="bully-live" style="margin:8px 0 0;"></p>
     </section>
 
     <section id="sec-lineup" data-ph="prep play break">
@@ -276,7 +277,7 @@
       </div>
     </section>
 
-    <section id="sec-special" data-ph="play break end">
+    <section id="sec-special" data-ph="play end">
       <h2>Über- / Unterzahl</h2>
       <div id="special-list"></div>
       <div id="special-summary" style="margin-top:8px;"></div>
@@ -446,7 +447,7 @@ function renderPhase(){
 var confirmEndTimer=null;
 function phaseMain(){
   var ph=state.phase||'prep', btn=document.getElementById('phase-btn');
-  if(ph==='prep'){startPeriod('1. Drittel');}
+  if(ph==='prep'){beginGame();}
   else if(ph==='play'){
     // Zweimal tippen, damit ein Drittel nicht versehentlich beendet wird
     if(btn.dataset.confirm==='1'){clearTimeout(confirmEndTimer); btn.dataset.confirm='0'; endPeriod();}
@@ -457,6 +458,20 @@ function phaseMain(){
   }
   else if(ph==='break'){var i=PERIODS.indexOf(state.period); if(i<3) startPeriod(PERIODS[i+1]); else endGame();}
   else{state.phase='break'; save(); renderAll();}
+}
+// Beim Spielstart: sind noch Daten eines früheren Spiels da, werden sie erst gesichert und dann gelöscht
+function resetGameData(){
+  state.shots=[]; state.specials=[]; state.bullies=[]; state.nextShotId=1; state.nextSpecialId=1; state.nextBullyId=1;
+  state.roster.forEach(function(p){p.events=[]; p.onField=false;});
+  state.emptyNet=false; state.lineup.extra=null; state.pendingZone=null; state.period='1. Drittel'; state.minute=0;
+}
+function beginGame(){
+  if(!hasGameData()){startPeriod('1. Drittel'); return;}
+  if(!confirm('Es sind noch Daten eines früheren Spiels gespeichert (Schüsse, Spielzeiten, Bullys). Sie werden jetzt gesichert und für das neue Spiel gelöscht. Fortfahren?')) return;
+  exportData().then(function(ok){
+    if(!ok){showToast('Abgebrochen – Daten nicht gesichert'); return;}
+    resetGameData(); startPeriod('1. Drittel');
+  });
 }
 function phaseSecond(){endGame();}
 function toggleSection(id){document.getElementById(id).classList.toggle('open');}
@@ -549,8 +564,17 @@ function miniStatsHtml(period){
   var enU=en.filter(function(x){return x.team==='Wir';}), enG=en.filter(function(x){return x.team==='Gegner';});
   function goals(l){return l.filter(function(x){return x.outcome==='Tor';}).length;}
   return '<table><tr><th></th><th>Anzahl</th><th>Erfolgreich</th><th>Tore</th><th>Gegentore</th></tr>'+row('Überzahl',agg('Überzahl'))+row('Unterzahl',agg('Unterzahl'))+'</table>'+
-    '<p class="muted" style="margin:8px 0 0;">Bullys: '+w+' gewonnen, '+(b.length-w)+' verloren'+(b.length?' ('+Math.round(w/b.length*100)+'%)':'')+
-    (en.length?' · Empty Net: wir '+enU.length+' Schüsse ('+goals(enU)+' Tore), Gegner '+enG.length+' ('+goals(enG)+' Tore)':'')+'</p>';
+    '<p class="muted" style="margin:8px 0 0;">'+
+    (en.length?'Empty Net: wir '+enU.length+' Schüsse ('+goals(enU)+' Tore), Gegner '+enG.length+' ('+goals(enG)+' Tore)':'')+'</p>';
+}
+function bullyTableHtml(period){
+  var idx=PERIODS.indexOf(state.period), upto=PERIODS.slice(0,idx+1), plist=period?[period]:upto;
+  function cnt(list){var w=list.filter(function(b){return b.won;}).length; return {w:w,l:list.length-w,n:list.length};}
+  function row(label,c,bold){var t=bold?'<b>'+label+'</b>':label; return '<tr><td>'+t+'</td><td>'+c.w+'</td><td>'+c.l+'</td><td>'+(c.n?Math.round(c.w/c.n*100)+'%':'–')+'</td></tr>';}
+  var rows=plist.map(function(p){return row(esc(p),cnt(state.bullies.filter(function(b){return b.period===p;})),false);}).join('');
+  var all=cnt(state.bullies.filter(function(b){return upto.indexOf(b.period)!==-1;}));
+  rows+=row(period?'Gesamt bisher':'Gesamt',all,true);
+  return '<table><tr><th>Drittel</th><th>Gewonnen</th><th>Verloren</th><th>Quote</th></tr>'+rows+'</table>';
 }
 function summaryHtml(period){
   var shots=shotsOf(period), t=teamTotals(shots), us=esc(usName()), opp=esc(oppName()), h='';
@@ -572,7 +596,8 @@ function summaryHtml(period){
     });
   }
   h+='<h3 style="margin-top:14px;">Spielzeiten (Minuten) und Plus/Minus</h3>'+playtimeTableHtml(period);
-  h+='<h3 style="margin-top:14px;">Über-/Unterzahl und Bully</h3>'+miniStatsHtml(period);
+  h+='<h3 style="margin-top:14px;">Bully</h3>'+bullyTableHtml(period);
+  h+='<h3 style="margin-top:14px;">Über-/Unterzahl</h3>'+miniStatsHtml(period);
   return h;
 }
 function renderSummary(){
@@ -741,7 +766,7 @@ function renderShots(){
 }
 
 function addBully(won){
-  state.bullies.push({id:state.nextBullyId++, period:state.period, won:won});
+  state.bullies.push({id:state.nextBullyId++, period:state.period, minute:curMinute(), won:won});
   save(); renderBullies();
 }
 function undoBully(){if(!state.bullies.length)return; state.bullies.pop(); save(); renderBullies();}
@@ -763,6 +788,11 @@ function renderBullies(){
     (rows||'<tr><td colspan="4" class="muted">Noch keine Bullys erfasst.</td></tr>')+
     (tot?'<tr><td><strong>Gesamt</strong></td><td>'+tw+'</td><td>'+tl+'</td><td>'+Math.round(tw/tot*100)+'%</td></tr>':'')+
     '</table>';
+  var bl=document.getElementById('bully-live');
+  if(bl){
+    var cur=state.bullies.filter(function(b){return b.period===state.period;}), bw=cur.filter(function(b){return b.won;}).length;
+    bl.textContent='Bullys '+state.period+': '+bw+' gewonnen · '+(cur.length-bw)+' verloren'+(cur.length?' ('+Math.round(bw/cur.length*100)+'%)':'');
+  }
 }
 
 function renderStats(){
@@ -1072,7 +1102,7 @@ function computePlayerMinutes(p,only){
     if(only&&per!==only) return;
     var evs=byPeriod[per].slice().sort(function(a,b){return a.minute-b.minute;}), openStart=null;
     evs.forEach(function(e){
-      if(e.action==='ein') openStart=e.minute;
+      if(e.action==='ein'){if(openStart===null) openStart=e.minute;}
       else if(e.action==='aus'&&openStart!==null){total+=Math.max(0,e.minute-openStart); openStart=null;}
     });
     // Offenes Intervall (Spieler noch auf dem Feld): nur im aktuell laufenden Drittel
