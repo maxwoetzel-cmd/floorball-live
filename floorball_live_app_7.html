@@ -302,7 +302,7 @@
       <div class="legend">
         <span><span class="dot" style="background:var(--wir);"></span><span id="legend-us">Jena</span></span>
         <span><span class="dot" style="background:var(--gegner);"></span><span id="legend-opp">Gegner</span></span>
-        <span><span class="dot" style="background:#888; border:2px solid #ccc;"></span>gefüllt = Tor, offen = daneben</span>
+        <span>● Tor · ◐ aufs Tor · ✕ daneben</span>
       </div>
     </section>
   </div>
@@ -703,6 +703,14 @@ function goalieTableHtml(shots){
   }).join('');
   return '<table><tr><th>Torhüter</th><th>Gehalten</th><th>Gegentore</th><th>Quote</th></tr>'+(rows||'<tr><td colspan="4" class="muted">Keine Schüsse aufs Tor.</td></tr>')+'</table>';
 }
+// Schussmarker: Tor = grosser gefuellter Kreis, Aufs Tor = halbtransparenter Kreis, Daneben = Kreuz (x)
+function shotMarkerSvg(cx,cy,outcome,col){
+  if(outcome==='Daneben'){
+    var a=6;
+    return '<g stroke="'+col+'" stroke-width="3.5" stroke-linecap="round"><line x1="'+(cx-a)+'" y1="'+(cy-a)+'" x2="'+(cx+a)+'" y2="'+(cy+a)+'"></line><line x1="'+(cx-a)+'" y1="'+(cy+a)+'" x2="'+(cx+a)+'" y2="'+(cy-a)+'"></line></g>';
+  }
+  return '<circle cx="'+cx+'" cy="'+cy+'" r="'+(outcome==='Tor'?10:7)+'" stroke="'+col+'" stroke-width="2.5" fill="'+col+'"'+(outcome==='Aufs Tor'?' fill-opacity="0.4"':'')+'></circle>';
+}
 // Schussbild einer Mannschaft (Offense = unsere Schüsse, Defense = Schüsse des Gegners) mit Anzahl je Zone
 function fieldSummarySvg(team,shots){
   var orientation=team==='Wir'?'offense':'defense', rows=team==='Wir'?ZONE_ROWS_OFF:ZONE_ROWS_DEF;
@@ -712,8 +720,7 @@ function fieldSummarySvg(team,shots){
     var z=x.zone.split('-'), col=ZONE_COLS.find(function(c){return c.key===z[1];}), rw=rows.find(function(r){return r.key===z[0];});
     if(!col||!rw) return;
     var cx=col.x+col.w/2+jitter(x.id,80), cy=rw.y+rw.h/2+jitter(x.id+0.5,80), col2=teamColor[team];
-    var fill=x.outcome==='Daneben'?'none':col2, op=x.outcome==='Aufs Tor'?' fill-opacity="0.4"':'';
-    parts.push('<circle cx="'+cx+'" cy="'+cy+'" r="'+(x.outcome==='Tor'?10:7)+'" stroke="'+col2+'" stroke-width="2.5" fill="'+fill+'"'+op+'></circle>');
+    parts.push(shotMarkerSvg(cx,cy,x.outcome,col2));
   });
   rows.forEach(function(rw){ZONE_COLS.forEach(function(col){
     var c=counts[rw.key+'-'+col.key]; if(!c) return;
@@ -1208,14 +1215,7 @@ function renderShots(){
   var svgns='http://www.w3.org/2000/svg';
   state.shots.filter(function(s){return s.team===state.currentTeam;}).forEach(function(s){
     var c=zoneCenterForCurrentView(s.zone); if(!c)return;
-    var circ=document.createElementNS(svgns,'circle');
-    circ.setAttribute('cx',c.cx+jitter(s.id,80)); circ.setAttribute('cy',c.cy+jitter(s.id+0.5,80));
-    circ.setAttribute('r', s.outcome==='Tor'?10:7);
-    circ.setAttribute('stroke',teamColor[s.team]); circ.setAttribute('stroke-width','2.5');
-    if(s.outcome==='Daneben'){circ.setAttribute('fill','none');}
-    else if(s.outcome==='Tor'){circ.setAttribute('fill',teamColor[s.team]);}
-    else {circ.setAttribute('fill',teamColor[s.team]); circ.setAttribute('fill-opacity','0.4');}
-    layer.appendChild(circ);
+    layer.insertAdjacentHTML('beforeend',shotMarkerSvg(c.cx+jitter(s.id,80),c.cy+jitter(s.id+0.5,80),s.outcome,teamColor[s.team]));
   });
   if(state.pendingZone){
     var ring=document.createElementNS(svgns,'circle');

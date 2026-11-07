@@ -68,7 +68,7 @@ Verantwortlich: Max Woetzel (Head-Coach Herren).
 - Testanleitung für andere Tester (Google-Dokument, Stand 08.11.2026).
 - Design-Runde 08.11.2026 (Tablet in der Halle): höherer Kontrast für `--text-muted`, größere Kleinschrift, Spielstand 40 px,
   Empty-Net-Badge in Amber (`--accent`) statt Rot, Toast oben, Vibration plus Toast nach jedem erfassten Schuss.
-  Offen: Vereinslogo (blau/weiß) als Inline-SVG/Base64, Schussmarker-Form nach Ergebnis, Stat-Tabellen (Zebra/Balken).
+  Schussmarker: Tor = Kreis gefüllt, Aufs Tor = Kreis halbtransparent, Daneben = Kreuz (`shotMarkerSvg`). Offen: Vereinslogo (blau/weiß) als Inline-SVG/Base64, Stat-Tabellen (Zebra/Balken).
 - Spielfelder (08.11.2026): Feldfarbe = Vereinsblau `#002d5a` (CD-Richtlinie, RGB 0/45/90; Magenta bewusst nicht verwendet).
   Überzahl und Unterzahl 1/2 zeigen ein Feld mit Linien (`fieldBgSvg`, Maßstab 20 Einheiten je Meter:
   Torraum (Rechteck) mit Tor (Netz) oben und Schutzraum darunter, Proportionen nach Vorlage des Vereins; `LF_DIM` = Seitenverhältnis). Positionen in `FM_POS` liegen so, dass kein
