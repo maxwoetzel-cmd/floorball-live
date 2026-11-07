@@ -1,5 +1,9 @@
 # Floorball Live — Projektkontext für Claude Code
 
+> **Stand, Entscheidungen, Fallstricke und offene Punkte:** siehe `Projektuebergabe_ClaudeCode.md`
+> (Übergabeprotokoll, bei jeder inhaltlichen Änderung im selben Commit aktuell halten).
+> Die Web-App-Variante (Apps Script, Saisonmanager, Drive) ist dort und im Abschnitt „Geräte und Verteilung“ unten beschrieben.
+
 ## Was ist das?
 "Floorball Live" ist eine eigenständige Web-App zur Live-Erfassung und Analyse
 der Spiele der USV-Jena-Floorball-Herren. Sie läuft komplett offline im Browser —
