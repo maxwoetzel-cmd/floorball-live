@@ -89,6 +89,39 @@
   .min-btn{width:64px; height:60px; font-size:30px; font-weight:600; line-height:1; padding:0; flex:0 0 auto;}
   .minute-controls input{width:90px; height:60px; text-align:center; font-size:30px; font-weight:600; font-variant-numeric:tabular-nums; padding:0;}
   .chip, .slot, .pick-chip, button{touch-action:manipulation;}
+
+  /* ---- Ablauf in Phasen (Vorbereitung, Spiel, Pause, Ende) ---- */
+  section[data-ph]{display:none;}
+  body.phase-prep section[data-ph~="prep"], body.phase-play section[data-ph~="play"],
+  body.phase-break section[data-ph~="break"], body.phase-end section[data-ph~="end"]{display:block;}
+  .web-only{display:none;}
+  body.webapp .web-only{display:block;}
+  #topbar{position:sticky; top:0; z-index:6; background:var(--bg); border-bottom:1px solid var(--border);
+    padding:8px 0; margin-bottom:10px; display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center;}
+  .tb-row{display:flex; align-items:center; gap:8px;}
+  .tb-score{font-size:18px; gap:10px;}
+  .tb-score b{font-size:26px; font-variant-numeric:tabular-nums;}
+  .tb-team{color:var(--text-secondary); font-size:13px; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .tb-period{font-size:13px; color:var(--wir); font-weight:700;}
+  .tb-en{background:var(--danger); color:#fff; font-weight:700; border-radius:8px; padding:5px 10px; font-size:13px;}
+  .tb-minute{display:none;}
+  body.phase-play .tb-minute{display:flex;}
+  .tb-minbox{display:flex; flex-direction:column; align-items:center;}
+  .tb-minbox input{width:84px; height:52px; text-align:center; font-size:28px; font-weight:600; padding:0; font-variant-numeric:tabular-nums;}
+  .min-btn{width:60px; height:52px; font-size:28px; font-weight:600; line-height:1; padding:0;}
+  .minute-caption{font-size:11px; color:var(--text-secondary); margin:2px 0 0;}
+  .tb-actions{margin-left:auto;}
+  .phase-btn{min-height:52px; font-size:16px; font-weight:600; padding:10px 18px;}
+  .toggle-btn{display:none; float:right; min-height:34px; padding:4px 10px; font-size:12px; text-transform:none; letter-spacing:0;}
+  body.phase-play .toggle-btn{display:inline-block;}
+  body.phase-play #sec-lineup:not(.open) .sec-body, body.phase-play #sec-stats:not(.open) .sec-body{display:none;}
+  .num-prep{display:none;}
+  body.phase-prep .num-prep{display:inline;}
+  .field-wrap{max-width:min(520px, calc(60vh * 0.94));}
+  @media (orientation:landscape) and (min-width:820px){
+    body.phase-play #play-layout{display:grid; grid-template-columns:minmax(360px,1.05fr) minmax(380px,1fr); gap:12px; align-items:start;}
+    body.phase-play .col-left{position:sticky; top:84px;}
+  }
 </style>
 </head>
 <body>
@@ -96,7 +129,28 @@
 <h1>Floorball live</h1>
 <div id="drive-status" class="muted" style="margin:-6px 0 8px;"></div>
 
-<section>
+<div id="topbar">
+  <div class="tb-row tb-score">
+    <span id="tb-us" class="tb-team">Jena</span><b id="tb-sc">0 : 0</b><span id="tb-opp" class="tb-team">Gegner</span>
+    <span class="tb-period" id="tb-period"></span>
+    <span id="tb-en" class="tb-en" style="display:none;">EMPTY NET</span>
+  </div>
+  <div class="tb-row tb-minute">
+    <button type="button" class="min-btn" onclick="changeMinute(-1)" aria-label="Minute runter">−</button>
+    <div class="tb-minbox">
+      <input type="number" id="current-minute" min="0" max="20" step="1" value="0" inputmode="numeric" onchange="onMinuteInput()" oninput="state.minute=curMinute(); save(); renderPlaytimes()">
+      <span class="minute-caption" id="minute-caption">Spielminute</span>
+    </div>
+    <button type="button" class="min-btn" onclick="changeMinute(1)" aria-label="Minute hoch">+</button>
+  </div>
+  <div class="tb-row tb-actions">
+    <button type="button" id="phase-btn" class="primary phase-btn" onclick="phaseMain()">Spiel starten – 1. Drittel</button>
+    <button type="button" id="phase-btn2" class="phase-btn" style="display:none;" onclick="phaseSecond()">Spiel beenden</button>
+  </div>
+</div>
+
+<section id="sec-game" data-ph="prep">
+  <h2>1 · Spiel</h2>
   <div class="row" style="margin-bottom:10px;">
     <div style="flex:1; min-width:120px;">
       <label class="muted" style="display:block; margin-bottom:4px;">Unser Team</label>
@@ -107,137 +161,142 @@
       <input type="text" id="team-opp" placeholder="Gegner" oninput="state.teamOpp=this.value; save(); renderStats();">
     </div>
   </div>
-  <div class="seg" id="period-seg">
-    <button type="button" class="active" data-period="1. Drittel" onclick="setPeriod(this)">1. Drittel</button>
-    <button type="button" data-period="2. Drittel" onclick="setPeriod(this)">2. Drittel</button>
-    <button type="button" data-period="3. Drittel" onclick="setPeriod(this)">3. Drittel</button>
-    <button type="button" data-period="Verlängerung" onclick="setPeriod(this)">Verlängerung</button>
+  <div class="web-only">
+    <p class="muted" id="sm-current" style="margin:0 0 8px;"></p>
+    <button type="button" onclick="loadGames()" style="width:100%;">Spielplan aus dem Saisonmanager laden</button>
+    <div id="sm-list" style="margin-top:10px;"></div>
   </div>
-  <div class="minute-stepper">
-    <span class="minute-caption" id="minute-caption">1. Drittel · Spielminute</span>
-    <div class="minute-controls">
-      <button type="button" class="min-btn" onclick="changeMinute(-1)" aria-label="Minute runter">−</button>
-      <input type="number" id="current-minute" min="0" max="20" step="1" value="0" inputmode="numeric" onchange="onMinuteInput()" oninput="state.minute=curMinute(); save(); renderPlaytimes()">
-      <button type="button" class="min-btn" onclick="changeMinute(1)" aria-label="Minute hoch">+</button>
+</section>
+
+<section id="sec-roster" data-ph="prep break">
+  <h2>2 · Kader</h2>
+  <div class="web-only">
+    <div class="row">
+      <button type="button" onclick="loadStammkader()" style="flex:1;">Stammkader laden</button>
+      <button type="button" onclick="loadSmRoster()" style="flex:1;">Mit Saisonmanager abgleichen</button>
     </div>
+    <div id="sm-roster"></div>
   </div>
-</section>
-
-<section id="sm-section" style="display:none;">
-  <h2>Spiel aus dem Saisonmanager</h2>
-  <p class="muted" id="sm-current" style="margin:0 0 8px;"></p>
-  <button type="button" onclick="loadGames()" style="width:100%;">Spielplan laden</button>
-  <div id="sm-list" style="margin-top:10px;"></div>
-  <button type="button" onclick="loadSmRoster()" style="width:100%; margin-top:8px;">Kader aus den letzten Spielen laden</button>
-  <div id="sm-roster"></div>
-</section>
-
-<section>
-  <h2>Schuss erfassen</h2>
-  <div class="row" style="margin-bottom:10px;">
-    <div class="seg" style="flex:1;">
-      <button type="button" class="team-btn active" data-team="Wir" onclick="setTeam(this)">Wir (Offense)</button>
-      <button type="button" class="team-btn gegner" data-team="Gegner" onclick="setTeam(this)">Gegner (Defense)</button>
+  <details style="margin-top:10px;">
+    <summary style="cursor:pointer; padding:8px 0; color:var(--text-secondary);">Spieler hinzufügen / Kader bearbeiten</summary>
+    <p class="muted" style="margin:0 0 6px;">Kapitän (K), Torhüter (T) und Position (D/C/O) über "Kader bearbeiten". Eine Zeile pro Spieler: Nummer und Name.</p>
+    <textarea id="roster-bulk" placeholder="7 Müller&#10;11 Schmidt&#10;23 Fischer"></textarea>
+    <div class="row" style="margin-top:8px;">
+      <button type="button" class="primary" onclick="loadBulkRoster()" style="flex:1;">Hinzufügen</button>
+      <button type="button" onclick="addPlayer()" style="flex:1;">Einzeln</button>
+      <button type="button" onclick="toggleRosterEdit()" style="flex:1;" id="roster-edit-toggle">Kader bearbeiten</button>
     </div>
-  </div>
-  <p class="view-label" id="view-label">Offense – wir greifen an, Tor oben</p>
-  <div class="field-wrap">
-    <svg class="field-svg" id="field-svg" viewBox="0 0 440 470" xmlns="http://www.w3.org/2000/svg"></svg>
-  </div>
-  <div class="legend">
-    <span><span class="dot" style="background:var(--wir);"></span><span id="legend-us">Jena</span></span>
-    <span><span class="dot" style="background:var(--gegner);"></span><span id="legend-opp">Gegner</span></span>
-    <span><span class="dot" style="background:#888; border:2px solid #ccc;"></span>gefüllt = Tor, offen = daneben</span>
-  </div>
-  <div class="outcome-bar" id="outcome-bar">
-    <span class="muted" id="outcome-label" style="width:100%;"></span>
-    <button type="button" class="primary" onclick="confirmShot('Tor')">Tor</button>
-    <button type="button" onclick="confirmShot('Aufs Tor')">Aufs Tor</button>
-    <button type="button" onclick="confirmShot('Daneben')">Daneben</button>
-    <button type="button" onclick="cancelShot()">Abbrechen</button>
-  </div>
+    <div id="roster-edit" style="margin-top:10px; display:none;"></div>
+    <button type="button" class="web-only" onclick="saveStammkader()" style="width:100%; margin-top:10px;">Aktuellen Kader als Stammkader in Drive speichern</button>
+  </details>
 </section>
 
-<section>
-  <h2>Bully</h2>
-  <div class="row">
-    <button type="button" class="ok" onclick="addBully(true)" style="flex:1;">Bully gewonnen</button>
-    <button type="button" onclick="addBully(false)" style="flex:1;">Bully verloren</button>
-    <button type="button" onclick="undoBully()" style="flex:0 0 auto;">Rückgängig</button>
-  </div>
-  <div id="bully-table" style="margin-top:10px;"></div>
-</section>
-
-<section>
-  <h2>Schuss-Statistik</h2>
-  <div id="stats-total"></div>
-  <div style="margin-top:12px;"><table id="stats-period-table"></table></div>
-  <div style="margin-top:12px;"><table id="stats-zone-table"></table></div>
-  <div style="margin-top:12px;"><table id="goalie-table"></table></div>
-  <div class="row" style="margin-top:10px;">
-    <button type="button" onclick="undoLastShot()" style="flex:1;">Letzten Schuss löschen</button>
-    <button type="button" onclick="downloadShotsCsv()" style="flex:1;">Schüsse als CSV</button>
-  </div>
-</section>
-
-<section>
-  <h2>Über- / Unterzahl</h2>
-  <p class="muted" style="margin:0 0 8px;">Antippen, wenn eine Situation beginnt. Danach eintragen, ob erfolgreich, und wie viele Tore/Gegentore dabei fielen.</p>
-  <div class="row">
-    <button type="button" onclick="addSpecial('Überzahl')" style="flex:1;">+ Überzahl (wir)</button>
-    <button type="button" onclick="addSpecial('Unterzahl')" style="flex:1;">+ Unterzahl (wir)</button>
-  </div>
-  <div id="special-list" style="margin-top:10px;"></div>
-  <div id="special-summary" style="margin-top:12px;"></div>
-  <div class="row" style="margin-top:10px;">
-    <button type="button" onclick="downloadSpecialCsv()" style="flex:1;">Über-/Unterzahl als CSV</button>
-  </div>
-</section>
-
-<section>
-  <h2>Kader (bleibt gespeichert)</h2>
-  <p class="muted" style="margin:0 0 6px;">Einmal eintragen, bleibt für alle Spiele erhalten. Eine Zeile pro Spieler: Nummer und Name. Kapitän (K), Torhüter (T) und Position (D/C/O) danach über "Kader bearbeiten" setzen.</p>
-  <textarea id="roster-bulk" placeholder="7 Müller&#10;11 Schmidt&#10;23 Fischer"></textarea>
-  <div class="row" style="margin-top:8px;">
-    <button type="button" class="primary" onclick="loadBulkRoster()" style="flex:1;">Hinzufügen</button>
-    <button type="button" onclick="addPlayer()" style="flex:1;">Einzeln</button>
-    <button type="button" onclick="toggleRosterEdit()" style="flex:1;" id="roster-edit-toggle">Kader bearbeiten</button>
-  </div>
-  <div id="roster-edit" style="margin-top:10px; display:none;"></div>
-</section>
-
-<section>
-  <h2>Spieltag: Wer ist dabei?</h2>
-  <p class="muted" style="margin:0 0 4px;">Antippen = anwesend heute. (Am Rechner/Tablet mit Maus kannst du Spieler zusätzlich in die Aufstellung ziehen – am Handy ist Antippen der Weg.)</p>
+<section id="sec-present" data-ph="prep break">
+  <h2>3 · Wer ist dabei?</h2>
+  <button type="button" class="web-only" onclick="loadSmLineup()" style="width:100%; margin-bottom:8px;">Aufstellung dieses Spiels aus dem Saisonmanager übernehmen</button>
+  <p class="muted" id="present-info" style="margin:0 0 4px;"></p>
+  <p class="muted" style="margin:0;">Antippen = anwesend. Steht im Saisonmanager noch nichts, einfach selbst antippen.</p>
   <div class="chip-grid" id="present-chips"></div>
 </section>
 
-<section>
-  <h2>Aufstellung <span id="lineup-period-badge" style="color:var(--wir); font-weight:700;"></span></h2>
-  <p class="muted" style="margin:0 0 4px;">Position antippen und Spieler direkt auswählen. Besetzten Spieler antippen für Wechsel mit Minute.</p>
-  <div id="lineup"></div>
-  <div class="slot-panel" id="slot-panel"></div>
-  <div class="row" style="margin-top:12px;">
-    <button type="button" onclick="pauseAll()" style="flex:1;">Drittelende – alle raus</button>
-    <button type="button" onclick="resumeAll()" style="flex:1;">Drittelbeginn – Aufstellung rein</button>
+<div id="play-layout">
+  <div class="col-left">
+    <section id="sec-shot" data-ph="play">
+      <h2 id="shot-title">Schuss erfassen</h2>
+      <div class="row" style="margin-bottom:10px;">
+        <div class="seg" style="flex:1;">
+          <button type="button" class="team-btn active" data-team="Wir" onclick="setTeam(this)">Wir (Offense)</button>
+          <button type="button" class="team-btn gegner" data-team="Gegner" onclick="setTeam(this)">Gegner (Defense)</button>
+        </div>
+      </div>
+      <p class="view-label" id="view-label">Offense – wir greifen an, Tor oben</p>
+      <div class="field-wrap">
+        <svg class="field-svg" id="field-svg" viewBox="0 0 440 470" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+      <div class="legend">
+        <span><span class="dot" style="background:var(--wir);"></span><span id="legend-us">Jena</span></span>
+        <span><span class="dot" style="background:var(--gegner);"></span><span id="legend-opp">Gegner</span></span>
+        <span><span class="dot" style="background:#888; border:2px solid #ccc;"></span>gefüllt = Tor, offen = daneben</span>
+      </div>
+      <div class="outcome-bar" id="outcome-bar">
+        <span class="muted" id="outcome-label" style="width:100%;"></span>
+        <button type="button" class="primary" onclick="confirmShot('Tor')">Tor</button>
+        <button type="button" onclick="confirmShot('Aufs Tor')">Aufs Tor</button>
+        <button type="button" onclick="confirmShot('Daneben')">Daneben</button>
+        <button type="button" onclick="cancelShot()">Abbrechen</button>
+      </div>
+    </section>
   </div>
-  <div id="bench-info" style="margin-top:10px;"></div>
-</section>
 
-<section>
-  <h2>Spielzeiten und Plus/Minus <span id="playtime-period-badge" style="color:var(--wir); font-weight:700;"></span></h2>
-  <div class="roster-row" style="border-top:none; grid-template-columns:40px 1fr 64px 48px 40px;">
-    <span class="muted">Nr</span><span class="muted">Name</span><span class="muted">Status</span><span class="muted">Min</span><span class="muted">+/-</span>
-  </div>
-  <div id="playtime-list"></div>
-  <div class="row" style="margin-top:10px;">
-    <button type="button" onclick="downloadRosterCsv()" style="flex:1;">Spielzeiten als CSV</button>
-  </div>
-</section>
+  <div class="col-right">
+    <section id="sec-quick" data-ph="play">
+      <h2>Schnelltasten</h2>
+      <div class="row">
+        <button type="button" class="ok" onclick="addBully(true)" style="flex:1;">Bully gewonnen</button>
+        <button type="button" onclick="addBully(false)" style="flex:1;">Bully verloren</button>
+        <button type="button" onclick="undoBully()" style="flex:0 0 auto;">Rückgängig</button>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button type="button" onclick="addSpecial('Überzahl')" style="flex:1;">+ Überzahl (wir)</button>
+        <button type="button" onclick="addSpecial('Unterzahl')" style="flex:1;">+ Unterzahl (wir)</button>
+      </div>
+      <div class="row" style="margin-top:8px;">
+        <button type="button" id="en-btn" onclick="toggleEmptyNet()" style="flex:1;">Torwart raus (Empty Net)</button>
+        <button type="button" onclick="undoLastShot()" style="flex:1;">Letzten Schuss löschen</button>
+      </div>
+    </section>
 
-<section>
+    <section id="sec-lineup" data-ph="prep play break">
+      <h2><span class="num-prep">4 · </span>Aufstellung <span id="lineup-period-badge" style="color:var(--wir); font-weight:700;"></span>
+        <button type="button" class="toggle-btn" onclick="toggleSection('sec-lineup')">Wechsel ▾</button></h2>
+      <div class="sec-body">
+        <p class="muted" style="margin:0 0 4px;">Position antippen und Spieler wählen. Besetzten Spieler antippen für einen Wechsel.</p>
+        <div id="lineup"></div>
+        <div class="slot-panel" id="slot-panel"></div>
+        <div id="bench-info" style="margin-top:10px;"></div>
+      </div>
+    </section>
+
+    <section id="sec-special" data-ph="play break end">
+      <h2>Über- / Unterzahl</h2>
+      <div id="special-list"></div>
+      <div id="special-summary" style="margin-top:8px;"></div>
+      <div class="row" style="margin-top:10px;">
+        <button type="button" onclick="downloadSpecialCsv()" style="flex:1;">Über-/Unterzahl als CSV</button>
+      </div>
+    </section>
+
+    <section id="sec-stats" data-ph="play break end">
+      <h2>Statistik <button type="button" class="toggle-btn" onclick="toggleSection('sec-stats')">anzeigen ▾</button></h2>
+      <div class="sec-body">
+        <div id="stats-total"></div>
+        <div style="margin-top:12px;"><table id="stats-period-table"></table></div>
+        <div style="margin-top:12px;"><table id="stats-zone-table"></table></div>
+        <div style="margin-top:12px;"><table id="goalie-table"></table></div>
+        <h3 style="margin-top:14px;">Bully</h3>
+        <div id="bully-table"></div>
+        <div class="row" style="margin-top:10px;">
+          <button type="button" onclick="downloadShotsCsv()" style="flex:1;">Schüsse als CSV</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="sec-playtimes" data-ph="break end">
+      <h2>Spielzeiten und Plus/Minus <span id="playtime-period-badge" style="color:var(--wir); font-weight:700;"></span></h2>
+      <div class="roster-row" style="border-top:none; grid-template-columns:40px 1fr 64px 48px 40px;">
+        <span class="muted">Nr</span><span class="muted">Name</span><span class="muted">Status</span><span class="muted">Min</span><span class="muted">+/-</span>
+      </div>
+      <div id="playtime-list"></div>
+      <div class="row" style="margin-top:10px;">
+        <button type="button" onclick="downloadRosterCsv()" style="flex:1;">Spielzeiten als CSV</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<section id="sec-export" data-ph="prep end">
   <h2>Speichern und übertragen</h2>
-  <p class="muted" style="margin:0 0 8px;">Wird automatisch auf diesem Gerät gespeichert. Der Kader bleibt auch bei "Neues Spiel" erhalten. Für die Saison-Übersicht am Laptop: nach jedem Spiel exportieren und die Dateien sammeln.</p>
+  <p class="muted" style="margin:0 0 8px;">Wird automatisch auf diesem Gerät gespeichert (in der Web-App zusätzlich nach Drive). Der Kader bleibt bei "Neues Spiel" erhalten.</p>
   <div class="row">
     <button type="button" onclick="exportData()" style="flex:1;">Spielstand exportieren</button>
     <button type="button" onclick="document.getElementById('import-file').click()" style="flex:1;">Spielstand importieren</button>
@@ -254,11 +313,11 @@
 var POS_KEYS=['OL','C','OR','DL','DR'];
 var POS_LABELS={OL:'Offense links', C:'Center', OR:'Offense rechts', DL:'Defense links', DR:'Defense rechts', G:'Goalie'};
 function emptyLine(){return {OL:null,C:null,OR:null,DL:null,DR:null};}
-function emptyLineup(){return {goalie:null, lines:[emptyLine(),emptyLine(),emptyLine()]};}
+function emptyLineup(){return {goalie:null, extra:null, lines:[emptyLine(),emptyLine(),emptyLine()]};}
 
 var state={
   teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir',
-  pendingZone:null, minute:0, game:null, shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(),
+  pendingZone:null, minute:0, game:null, phase:'prep', emptyNet:false, shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(),
   nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1
 };
 var selectedSlot=null;
@@ -278,6 +337,8 @@ function load(){
     if(!Array.isArray(state.bullies)) state.bullies=[];
     state.pendingZone=null; // halbfertige Schuss-Auswahl nicht über einen Reload mitnehmen
     state.minute=parseInt(state.minute)||0;
+    state.emptyNet=!!state.emptyNet;
+    if(!state.phase) state.phase=(state.shots.length||state.specials.length||state.bullies.length)?'play':'prep'; // Stand aus früherer Version
   }catch(e){}
 }
 function showToast(m){var t=document.getElementById('toast'); t.textContent=m; t.classList.add('show'); setTimeout(function(){t.classList.remove('show');},1500);}
@@ -303,20 +364,98 @@ function sortedRoster(){
 }
 var teamColor={Wir:'#378add', Gegner:'#d85a30'};
 
-function setPeriod(btn){
-  if(btn.dataset.period===state.period) return;
-  // Offene Einsatzzeiten im alten Drittel abschliessen, sonst gehen Minuten verloren
-  var closed=closeOpenIntervals();
-  document.querySelectorAll('#period-seg button').forEach(function(b){b.classList.remove('active');});
-  btn.classList.add('active'); state.period=btn.dataset.period;
-  document.getElementById('current-minute').value=0; state.minute=0;
-  updateMinuteCaption();
-  save(); renderBullies(); renderRosterAll();
-  if(closed) showToast(closed+' Spieler raus – Drittelbeginn drücken, um die Aufstellung wieder einzusetzen');
+/* ---------- Ablauf: Vorbereitung -> Drittel -> Pause -> ... -> Spielende ---------- */
+function isLive(){return state.phase==='play';}
+function computeScore(){var r={Wir:0,Gegner:0}; state.shots.forEach(function(x){if(x.outcome==='Tor') r[x.team]++;}); return r;}
+function zoneLabel(z){
+  var m=String(z).split('-');
+  var r={tornah:'nah am Tor',zentral:'Mitte',fern:'weit weg'}[m[0]]||m[0];
+  var c={links:'links',mitte:'Mitte',rechts:'rechts'}[m[1]]||m[1];
+  return r+' · '+c;
+}
+function updateTopbar(){
+  var sc=computeScore();
+  document.getElementById('tb-us').textContent=usName();
+  document.getElementById('tb-opp').textContent=oppName();
+  document.getElementById('tb-sc').textContent=sc.Wir+' : '+sc.Gegner;
+  var en=document.getElementById('tb-en'); if(en) en.style.display=state.emptyNet?'inline-block':'none';
+  var eb=document.getElementById('en-btn');
+  if(eb){eb.textContent=state.emptyNet?'Torwart wieder rein':'Torwart raus (Empty Net)'; eb.className=state.emptyNet?'danger-confirm':'';}
+}
+function renderPhase(){
+  var ph=state.phase||'prep', b=document.body;
+  ['prep','play','break','end'].forEach(function(p){b.classList.toggle('phase-'+p, p===ph);});
+  var idx=PERIODS.indexOf(state.period), btn=document.getElementById('phase-btn'), btn2=document.getElementById('phase-btn2'), label='';
+  btn2.style.display='none'; btn.className='primary phase-btn'; btn.dataset.confirm='0';
+  if(ph==='prep'){btn.textContent='Spiel starten – 1. Drittel'; label='Vorbereitung';}
+  else if(ph==='play'){btn.textContent='Drittel beendet'; btn.className='phase-btn'; label=state.period+' läuft';}
+  else if(ph==='break'){
+    label=state.period+' beendet';
+    if(idx<2){btn.textContent=PERIODS[idx+1]+' starten';}
+    else if(idx===2){btn.textContent='Verlängerung starten'; btn2.style.display='inline-block'; btn2.textContent='Spiel beenden';}
+    else{btn.textContent='Spiel beenden';}
+  } else {btn.textContent='Zurück zur Pause'; btn.className='phase-btn'; label='Spiel beendet';}
+  document.getElementById('tb-period').textContent=label;
+  updateTopbar(); updateMinuteCaption();
+}
+var confirmEndTimer=null;
+function phaseMain(){
+  var ph=state.phase||'prep', btn=document.getElementById('phase-btn');
+  if(ph==='prep'){startPeriod('1. Drittel');}
+  else if(ph==='play'){
+    // Zweimal tippen, damit ein Drittel nicht versehentlich beendet wird
+    if(btn.dataset.confirm==='1'){clearTimeout(confirmEndTimer); btn.dataset.confirm='0'; endPeriod();}
+    else{
+      btn.dataset.confirm='1'; btn.textContent='Wirklich beenden? Nochmal tippen'; btn.classList.add('danger-confirm');
+      confirmEndTimer=setTimeout(function(){btn.dataset.confirm='0'; btn.classList.remove('danger-confirm'); renderPhase();},3500);
+    }
+  }
+  else if(ph==='break'){var i=PERIODS.indexOf(state.period); if(i<3) startPeriod(PERIODS[i+1]); else endGame();}
+  else{state.phase='break'; save(); renderAll();}
+}
+function phaseSecond(){endGame();}
+function toggleSection(id){document.getElementById(id).classList.toggle('open');}
+function startPeriod(name){
+  if(state.phase==='prep' && !state.roster.some(function(p){return p.present;})){showToast('Erst oben die anwesenden Spieler wählen'); return;}
+  state.period=name; state.minute=0; document.getElementById('current-minute').value=0;
+  state.phase='play'; state.pendingZone=null; selectedSlot=null;
+  var n=resumeAll(true);
+  document.getElementById('sec-lineup').classList.remove('open'); document.getElementById('sec-stats').classList.remove('open');
+  save(); renderAll(); showToast(name+' gestartet – '+n+' Spieler auf dem Eis');
+}
+function endPeriod(){
+  closeOpenIntervals();
+  state.emptyNet=false; state.lineup.extra=null; selectedSlot=null; state.pendingZone=null;
+  if(state.period!=='Verlängerung'){state.minute=20; document.getElementById('current-minute').value=20;}
+  state.phase='break'; save(); renderAll(); showToast(state.period+' beendet');
+}
+function endGame(){
+  if(state.phase==='play') endPeriod();
+  state.phase='end'; save(); renderAll(); showToast('Spiel beendet');
+}
+function toggleEmptyNet(){
+  if(!isLive()){showToast('Nur im laufenden Drittel'); return;}
+  var m=curMinute(), g=playerById(state.lineup.goalie);
+  if(!state.emptyNet){
+    state.emptyNet=true;
+    if(g&&g.onField){g.events.push({period:state.period, minute:m, action:'aus'}); g.onField=false;}
+    selectedSlot={line:'X',pos:'X'};
+    document.getElementById('sec-lineup').classList.add('open');
+    save(); renderAll(); showToast('Torwart raus – 6. Feldspieler wählen (optional)');
+  } else {
+    state.emptyNet=false;
+    var x=playerById(state.lineup.extra);
+    if(x&&x.onField){x.events.push({period:state.period, minute:m, action:'aus'}); x.onField=false;}
+    state.lineup.extra=null; selectedSlot=null;
+    if(g&&g.present&&!g.onField){g.events.push({period:state.period, minute:m, action:'ein'}); g.onField=true;}
+    save(); renderAll(); showToast('Torwart wieder im Tor');
+  }
 }
 function updateMinuteCaption(){
   var el=document.getElementById('minute-caption');
   if(el) el.textContent = state.period+' · Spielminute';
+  var st=document.getElementById('shot-title');
+  if(st) st.textContent='Schuss erfassen · '+state.period+' · Min '+curMinute();
   var badgeText = '– '+state.period+', Min '+curMinute();
   var lb=document.getElementById('lineup-period-badge');
   var pb=document.getElementById('playtime-period-badge');
@@ -399,7 +538,7 @@ function renderField(){
 function onZoneClick(zoneName,col,rw){
   state.pendingZone={name:zoneName, cx:col.x+col.w/2, cy:rw.y+rw.h/2};
   var teamLabel=state.currentTeam==='Wir'?usName():oppName();
-  document.getElementById('outcome-label').textContent='Schuss '+teamLabel+' | Zone '+zoneName;
+  document.getElementById('outcome-label').textContent='Schuss '+teamLabel+' | '+state.period+', Min '+curMinute()+' | '+zoneLabel(zoneName);
   document.getElementById('outcome-bar').classList.add('show');
   renderShots();
 }
@@ -410,8 +549,9 @@ function activeGoalieId(){
 function confirmShot(outcome){
   if(!state.pendingZone) return;
   var onIds=state.roster.filter(function(p){return p.onField;}).map(function(p){return p.id;});
-  var shot={id:state.nextShotId++, period:state.period, team:state.currentTeam, zone:state.pendingZone.name, outcome:outcome, onFieldIds:onIds};
+  var shot={id:state.nextShotId++, period:state.period, team:state.currentTeam, zone:state.pendingZone.name, outcome:outcome, minute:curMinute(), onFieldIds:onIds};
   if(state.currentTeam==='Gegner') shot.goalieId=activeGoalieId();
+  if(state.emptyNet) shot.emptyNet=true;
   state.shots.push(shot);
   state.pendingZone=null;
   document.getElementById('outcome-bar').classList.remove('show');
@@ -498,17 +638,17 @@ function renderStats(){
   document.getElementById('stats-period-table').innerHTML=
     '<tr><th>Tore je Drittel</th><th>'+usName()+'</th><th>'+oppName()+'</th></tr>'+(pRows||'<tr><td colspan="3" class="muted">Noch keine Tore.</td></tr>');
   var zRows=Object.keys(byZone).sort().map(function(z){
-    return '<tr><td>'+z+'</td><td>'+byZone[z].Wir+'</td><td>'+byZone[z].Gegner+'</td></tr>';
+    return '<tr><td>'+(z.slice(0,3)==='Off'?'Wir: ':'Gegner: ')+zoneLabel(z.slice(4))+'</td><td>'+byZone[z].Wir+'</td><td>'+byZone[z].Gegner+'</td></tr>';
   }).join('');
   document.getElementById('stats-zone-table').innerHTML=
     '<tr><th>Schüsse je Zone</th><th>'+usName()+'</th><th>'+oppName()+'</th></tr>'+(zRows||'<tr><td colspan="3" class="muted">Noch keine Schüsse.</td></tr>');
-  renderGoalieStats();
+  renderGoalieStats(); updateTopbar();
 }
 function renderGoalieStats(){
   var per={};
   state.shots.forEach(function(s){
     if(s.team!=='Gegner') return;
-    var gid=s.goalieId;
+    var gid=s.emptyNet?'EN':s.goalieId;
     if(gid===null||gid===undefined) gid='?';
     if(!per[gid]) per[gid]={saves:0, goals:0};
     if(s.outcome==='Aufs Tor') per[gid].saves++;
@@ -516,8 +656,8 @@ function renderGoalieStats(){
   });
   var keys=Object.keys(per);
   var rows=keys.map(function(k){
-    var p = k==='?' ? null : playerById(parseInt(k));
-    var name = p ? playerLabel(p) : 'Kein Goalie zugeordnet';
+    var p = (k==='?'||k==='EN') ? null : playerById(parseInt(k));
+    var name = p ? playerLabel(p) : (k==='EN'?'Ohne Torwart (Empty Net)':'Kein Goalie zugeordnet');
     var faced=per[k].saves+per[k].goals;
     var pct=faced?Math.round(per[k].saves/faced*100):0;
     return '<tr><td>'+name+'</td><td>'+per[k].saves+'</td><td>'+per[k].goals+'</td><td>'+pct+'%</td></tr>';
@@ -607,16 +747,19 @@ function togglePresent(id){
 }
 function removeFromLineup(id){
   if(state.lineup.goalie===id) state.lineup.goalie=null;
+  if(state.lineup.extra===id) state.lineup.extra=null;
   state.lineup.lines.forEach(function(line){POS_KEYS.forEach(function(k){if(line[k]===id)line[k]=null;});});
 }
 function findSlotOf(id){
   if(state.lineup.goalie===id) return {line:'G', pos:'G'};
+  if(state.lineup.extra===id) return {line:'X', pos:'X'};
   for(var i=0;i<3;i++){for(var j=0;j<POS_KEYS.length;j++){if(state.lineup.lines[i][POS_KEYS[j]]===id) return {line:i, pos:POS_KEYS[j]};}}
   return null;
 }
 function assignedIds(){
   var ids=[];
   if(state.lineup.goalie!==null) ids.push(state.lineup.goalie);
+  if(state.lineup.extra!=null) ids.push(state.lineup.extra);
   state.lineup.lines.forEach(function(l){POS_KEYS.forEach(function(k){if(l[k]!==null)ids.push(l[k]);});});
   return ids;
 }
@@ -625,15 +768,16 @@ function availableForSlot(slot){
   var avail=sortedRoster().filter(function(p){return p.present&&used.indexOf(p.id)===-1;});
   if(!slot) return avail;
   function score(p){
+    if(slot.line==='X') return p.isGoalie?1:0;
     if(slot.line==='G') return p.isGoalie?0:1;
     var want = (slot.pos==='DL'||slot.pos==='DR')?'D':(slot.pos==='C'?'C':'O');
     return p.pos===want?0:1;
   }
   return avail.slice().sort(function(a,b){return score(a)-score(b);});
 }
-function getSlotValue(slot){return slot.line==='G'?state.lineup.goalie:state.lineup.lines[slot.line][slot.pos];}
-function setSlotValue(slot,val){if(slot.line==='G')state.lineup.goalie=val; else state.lineup.lines[slot.line][slot.pos]=val;}
-function slotLabel(slot){return slot.line==='G'?'Goalie':(slot.line+1)+'. Reihe – '+POS_LABELS[slot.pos];}
+function getSlotValue(slot){return slot.line==='G'?state.lineup.goalie:(slot.line==='X'?state.lineup.extra:state.lineup.lines[slot.line][slot.pos]);}
+function setSlotValue(slot,val){if(slot.line==='G')state.lineup.goalie=val; else if(slot.line==='X')state.lineup.extra=val; else state.lineup.lines[slot.line][slot.pos]=val;}
+function slotLabel(slot){return slot.line==='G'?'Goalie':(slot.line==='X'?'6. Feldspieler (Empty Net)':(slot.line+1)+'. Reihe – '+POS_LABELS[slot.pos]);}
 
 function slotClick(lineIdx,pos){selectedSlot={line:lineIdx,pos:pos}; renderLineup(); renderSlotPanel();}
 function renderSlotPanel(){
@@ -667,9 +811,10 @@ function pickForSlot(pid){
     if(pOut&&pOut.onField){pOut.events.push({period:state.period, minute:minute, action:'aus'}); pOut.onField=false;}
   }
   setSlotValue(selectedSlot,pid);
-  pIn.events.push({period:state.period, minute:minute, action:'ein'}); pIn.onField=true;
+  // Spielzeit läuft nur im laufenden Drittel; in Vorbereitung/Pause wird nur die Aufstellung gesetzt
+  if(isLive()){pIn.events.push({period:state.period, minute:minute, action:'ein'}); pIn.onField=true;}
   save(); closeSlotPanel(); renderPlaytimes();
-  showToast(playerLabel(pIn)+' rein (Min '+minute+')');
+  showToast(isLive()?playerLabel(pIn)+' rein (Min '+minute+')':playerLabel(pIn)+' eingesetzt');
 }
 function clearSlot(){
   var minute=slotMinute();
@@ -685,18 +830,15 @@ function closeOpenIntervals(){
   state.roster.forEach(function(p){if(p.onField){p.events.push({period:state.period, minute:endMinute, action:'aus'}); p.onField=false; count++;}});
   return count;
 }
-function pauseAll(){
-  var endMinute = state.period==='Verlängerung' ? curMinute() : 20;
-  var count=closeOpenIntervals();
-  save(); renderRosterAll(); showToast(count+' Spieler raus – '+state.period+' mit Min '+endMinute+' abgeschlossen');
-}
-function resumeAll(){
+function resumeAll(silent){
   var minute=curMinute(), count=0;
   assignedIds().forEach(function(id){
     var p=playerById(id);
     if(p&&p.present&&!p.onField){p.events.push({period:state.period, minute:minute, action:'ein'}); p.onField=true; count++;}
   });
+  if(silent) return count;
   save(); renderRosterAll(); showToast(count+' Spieler rein (Min '+minute+')');
+  return count;
 }
 
 /* Drag & Drop (Desktop): Spieltag-Chip -> Slot oder Auswechselbank */
@@ -720,7 +862,7 @@ function slotDrop(ev,lineIdx,pos){
       if(pOut&&pOut.onField){pOut.events.push({period:state.period, minute:minute, action:'aus'}); pOut.onField=false;}
     }
     setSlotValue(slot,pid);
-    p.events.push({period:state.period, minute:minute, action:'ein'}); p.onField=true;
+    if(isLive()){p.events.push({period:state.period, minute:minute, action:'ein'}); p.onField=true;}
   }
   save(); renderRosterAll();
 }
@@ -741,13 +883,13 @@ function dragOverHandler(ev){ev.preventDefault(); ev.currentTarget.classList.add
 function dragLeaveHandler(ev){ev.currentTarget.classList.remove('dragover');}
 
 function slotHtml(lineIdx,pos){
-  var val=lineIdx==='G'?state.lineup.goalie:state.lineup.lines[lineIdx][pos];
+  var val=lineIdx==='G'?state.lineup.goalie:(lineIdx==='X'?state.lineup.extra:state.lineup.lines[lineIdx][pos]);
   var p=playerById(val);
   var isSel=selectedSlot&&selectedSlot.line===lineIdx&&selectedSlot.pos===pos;
   var cls='slot'+(p?' filled':'')+(isSel?' selected':'');
-  var posLabel=lineIdx==='G'?'Goalie':POS_LABELS[pos];
+  var posLabel=lineIdx==='G'?'Goalie':(lineIdx==='X'?'6. Feldspieler':POS_LABELS[pos]);
   var who=p?playerLabel(p):'+';
-  var lineArg=lineIdx==='G'?"'G'":lineIdx;
+  var lineArg=(lineIdx==='G'||lineIdx==='X')?"'"+lineIdx+"'":lineIdx;
   return '<div class="'+cls+'" onclick="slotClick('+lineArg+',\''+pos+'\')" '+
     'ondragover="dragOverHandler(event)" ondragleave="dragLeaveHandler(event)" ondrop="slotDrop(event,'+lineArg+',\''+pos+'\')">'+
     '<span class="pos">'+posLabel+'</span><span class="who">'+who+'</span></div>';
@@ -755,6 +897,7 @@ function slotHtml(lineIdx,pos){
 function renderLineup(){
   var el=document.getElementById('lineup');
   var html='<div class="line-card"><p class="line-title">Tor</p><div class="goalie-wrap">'+slotHtml('G','G')+'</div></div>';
+  if(state.emptyNet) html+='<div class="line-card"><p class="line-title">Empty Net</p><div class="goalie-wrap">'+slotHtml('X','X')+'</div></div>';
   for(var i=0;i<3;i++){
     html+='<div class="line-card"><p class="line-title">'+(i+1)+'. Reihe</p>'+
       '<div class="slot-grid-off">'+slotHtml(i,'OL')+slotHtml(i,'C')+slotHtml(i,'OR')+'</div>'+
@@ -832,6 +975,8 @@ function renderRosterAll(skipEdit){
       return '<div class="chip'+(p.present?' present':'')+'" draggable="true" ondragstart="chipDragStart(event,'+p.id+')" onclick="togglePresent('+p.id+')">'+playerLabel(p)+'</div>';
     }).join('');
   }
+  var pi=document.getElementById('present-info');
+  if(pi) pi.textContent=state.roster.filter(function(p){return p.present;}).length+' von '+state.roster.length+' anwesend'+(presentNote?' · '+presentNote:'');
   renderLineup(); renderSlotPanel(); renderPlaytimes(); renderGoalieStats();
 }
 
@@ -879,15 +1024,53 @@ function pickGame(id){
   save(); renderStats(); renderGameInfo(); renderGames();
   showToast('Spiel gewählt: '+g.opponent);
 }
-// Kader aus dem Saisonmanager: Namen als Nachname, bei doppeltem Nachnamen mit Initial
-var smRoster=[];
-function smNames(list){
-  var cnt={}; list.forEach(function(p){cnt[p.last]=(cnt[p.last]||0)+1;});
-  var names=list.map(function(p){return cnt[p.last]>1?((p.first||'').charAt(0)+'. '+p.last):p.last;});
+// ---- Kader: Stammkader (Drive, kader.json) und Saisonmanager ----
+var smRoster=[], presentNote='';
+function normName(s){return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();}
+// Anzeigename: Nachname, bei gleichem Nachnamen mit Initial, bei gleicher Initiale mit Vornamen
+function displayNames(list){
+  var cnt={}; list.forEach(function(p){var k=normName(p.last); cnt[k]=(cnt[k]||0)+1;});
+  var names=list.map(function(p){return cnt[normName(p.last)]>1?((p.first||'').charAt(0)+'. '+p.last):p.last;});
   var cnt2={}; names.forEach(function(n){cnt2[n]=(cnt2[n]||0)+1;});
-  // gleiche Initiale und gleicher Nachname: ersten Vornamen ausschreiben
   return list.map(function(p,i){return {p:p, name:cnt2[names[i]]>1?((p.first||'').split(' ')[0]+' '+p.last):names[i]};});
 }
+// Findet den passenden Spieler im Kader: Saisonmanager-ID, sonst Nachname + Initial
+function findRosterMatch(p){
+  if(p.id!=null){var byId=state.roster.find(function(r){return r.smId===p.id;}); if(byId) return byId;}
+  var L=normName(p.last), F=normName(p.first).charAt(0);
+  return state.roster.find(function(r){
+    if(r.last) return normName(r.last)===L && (!F||!r.first||normName(r.first).charAt(0)===F);
+    var n=normName(r.name); return n===L || (F!=='' && n===F+'. '+L);
+  });
+}
+function newRosterPlayer(p,name,present){
+  return {id:state.nextPlayerId++, nr:p.nr==null?'':String(p.nr), name:name, first:p.first||'', last:p.last||name,
+    isCaptain:!!p.captain, isGoalie:!!p.goalie, pos:p.goalie?'':(p.pos||''), present:!!present, onField:false, events:[]};
+}
+function loadStammkader(silent){
+  return gsRun('readFile',['kader.json']).then(function(text){
+    if(!text){if(!silent) showToast('Kein Stammkader in Drive gefunden (kader.json)'); return 0;}
+    var data=JSON.parse(text), list=data.players||data, added=0, updated=0;
+    displayNames(list).forEach(function(o){
+      var p=o.p, ex=findRosterMatch(p);
+      if(ex){
+        ex.first=p.first||ex.first; ex.last=p.last||ex.last; ex.name=o.name;
+        if(p.nr!=null&&p.nr!=='') ex.nr=String(p.nr);
+        ex.isGoalie=!!p.goalie; ex.pos=p.goalie?'':(p.pos||ex.pos||''); ex.isCaptain=!!p.captain; updated++;
+      } else {state.roster.push(newRosterPlayer(p,o.name,false)); added++;}
+    });
+    save(); renderRosterAll(); showToast('Stammkader: '+added+' neu, '+updated+' aktualisiert'); return added+updated;
+  }).catch(function(e){if(!silent) showToast('Stammkader nicht geladen: '+e.message); return 0;});
+}
+function saveStammkader(){
+  if(!state.roster.length){showToast('Kader ist leer'); return;}
+  if(!confirm('Den aktuellen Kader als Stammkader in Drive speichern? Der bisherige Stammkader wird überschrieben.')) return;
+  var list=sortedRoster().map(function(r){return {nr:String(r.nr||''), first:r.first||'', last:r.last||r.name||'', goalie:!!r.isGoalie, pos:r.pos||'', captain:!!r.isCaptain};});
+  gsRun('saveFile',['kader.json', JSON.stringify({version:1, players:list}, null, 1), true])
+    .then(function(){showToast('Stammkader gespeichert ('+list.length+' Spieler)');})
+    .catch(function(e){showToast('Speichern fehlgeschlagen: '+e.message);});
+}
+// Abgleich mit den letzten Spielen: ergänzt neue Spieler, aktualisiert Nummern (niemand wird gelöscht)
 function loadSmRoster(){
   var el=document.getElementById('sm-roster');
   el.innerHTML='<p class="muted" style="margin:8px 0;">Lade Kader …</p>';
@@ -895,23 +1078,40 @@ function loadSmRoster(){
     smRoster=list||[];
     if(!smRoster.length){el.innerHTML='<p class="muted" style="margin:8px 0;">Keine Spieler gefunden (noch keine beendeten Spiele?).</p>'; return;}
     el.innerHTML='<p class="muted" style="margin:8px 0;">'+smRoster.length+' Spieler aus den letzten Spielen:</p>'+
-      '<div class="chip-grid">'+smNames(smRoster).map(function(o){return '<span class="chip">'+esc((o.p.nr==null?'':o.p.nr+' ')+o.name+(o.p.goalie?' (T)':''))+'</span>';}).join('')+'</div>'+
-      '<button type="button" class="primary" style="width:100%; margin-top:10px;" onclick="applySmRoster()">In den Kader übernehmen</button>';
+      '<div class="chip-grid">'+displayNames(smRoster).map(function(o){return '<span class="chip">'+esc((o.p.nr==null?'':o.p.nr+' ')+o.name+(o.p.goalie?' (T)':''))+'</span>';}).join('')+'</div>'+
+      '<button type="button" class="primary" style="width:100%; margin-top:10px;" onclick="applySmRoster()">Abgleichen und neue Spieler ergänzen</button>';
   }).catch(function(e){el.innerHTML='<p class="muted" style="margin:8px 0; color:var(--danger);">Kader nicht geladen: '+esc(e.message)+'</p>';});
 }
-// Übernimmt den Saisonmanager-Kader: vorhandene Spieler werden (über ihre Saisonmanager-ID oder gleiche Nr + Name)
-// aktualisiert, neue ergänzt. Es wird niemand gelöscht; K, Position und Anwesenheit bleiben erhalten.
 function applySmRoster(){
   var added=0, updated=0;
-  smNames(smRoster).forEach(function(o){
-    var p=o.p, nr=String(p.nr==null?'':p.nr);
-    var ex=state.roster.find(function(r){return r.smId===p.id;}) ||
-           state.roster.find(function(r){return !r.smId && String(r.nr)===nr && (r.name||'').toLowerCase()===o.name.toLowerCase();});
-    if(ex){ex.smId=p.id; ex.nr=nr; ex.name=o.name; if(p.goalie){ex.isGoalie=true; ex.pos='';} updated++;}
-    else{state.roster.push({id:state.nextPlayerId++, nr:nr, name:o.name, isCaptain:false, isGoalie:!!p.goalie, pos:'', present:false, onField:false, events:[], smId:p.id}); added++;}
+  displayNames(smRoster).forEach(function(o){
+    var p=o.p, ex=findRosterMatch(p);
+    if(ex){ex.smId=p.id; ex.first=ex.first||p.first; ex.last=ex.last||p.last; if(p.nr!=null) ex.nr=String(p.nr); if(p.goalie){ex.isGoalie=true; ex.pos='';} updated++;}
+    else{var np=newRosterPlayer(p,o.name,false); np.smId=p.id; state.roster.push(np); added++;}
   });
   save(); renderRosterAll();
-  showToast(added+' neu, '+updated+' aktualisiert');
+  showToast(added+' neu, '+updated+' abgeglichen');
+}
+// Wählt die im Saisonmanager für das gewählte Spiel eingetragenen Spieler direkt als anwesend aus
+function loadSmLineup(){
+  if(!state.game||!state.game.id){showToast('Erst oben ein Spiel wählen'); return;}
+  presentNote='Lade Aufstellung …'; renderRosterAll();
+  gsRun('getGameLineup',[state.game.id]).then(function(res){
+    var list=(res&&res.players)||[];
+    if(!list.length){presentNote='Im Saisonmanager ist noch keine Aufstellung eingetragen – bitte selbst antippen.'; renderRosterAll(); return;}
+    var matched={}, added=0;
+    displayNames(list).forEach(function(o){
+      var p=o.p, ex=findRosterMatch(p);
+      if(!ex){ex=newRosterPlayer(p,o.name,true); state.roster.push(ex); added++;}
+      ex.smId=p.id; ex.first=ex.first||p.first; ex.last=ex.last||p.last;
+      if(p.nr!=null) ex.nr=String(p.nr);
+      if(p.goalie){ex.isGoalie=true; ex.pos='';}
+      matched[ex.id]=true;
+    });
+    state.roster.forEach(function(r){r.present=!!matched[r.id]; if(!r.present) removeFromLineup(r.id);});
+    presentNote='aus dem Saisonmanager übernommen'+(added?' ('+added+' neu im Kader)':'');
+    save(); renderRosterAll();
+  }).catch(function(e){presentNote='Saisonmanager: '+e.message; renderRosterAll();});
 }
 function setDriveStatus(t){var el=document.getElementById('drive-status'); if(el) el.textContent=t;}
 // Spielstand ein paar Sekunden nach der letzten Änderung automatisch nach Drive sichern
@@ -926,14 +1126,15 @@ function scheduleDriveSave(){
       .catch(function(){setDriveStatus('Drive-Sicherung fehlgeschlagen – bitte exportieren');});
   },15000);
 }
-// Ist der Browserspeicher leer, aber in Drive liegt ein Stand, wird er zum Laden angeboten
+// Ist der Browserspeicher leer: gesicherten Spielstand aus Drive anbieten, sonst den Stammkader laden
 function offerDriveRestore(){
   if(!inWebApp()||hasGameData()||state.roster.length>0) return;
   gsRun('readFile',['spielstand_aktuell.json']).then(function(text){
-    if(!text) return;
-    if(!confirm('In Drive liegt ein gesicherter Spielstand. Jetzt laden?')) return;
-    var payload=JSON.parse(text); applyImported(payload.state||payload);
-  }).catch(function(){});
+    if(text && confirm('In Drive liegt ein gesicherter Spielstand. Jetzt laden?')){
+      var payload=JSON.parse(text); applyImported(payload.state||payload); return;
+    }
+    return loadStammkader(true);
+  }).catch(function(){loadStammkader(true);});
 }
 
 function csvEscape(v){return '"'+String(v).replace(/"/g,'""')+'"';}
@@ -971,9 +1172,9 @@ function saveFile(blob,filename){
   return Promise.resolve(true);
 }
 function downloadShotsCsv(){
-  var rows=[['Spiel','Drittel','Team','Ansicht','Zone','Ergebnis']];
+  var rows=[['Spiel','Drittel','Minute','Team','Ansicht','Zone','Ergebnis','Empty Net']];
   var match=usName()+' vs '+oppName();
-  state.shots.forEach(function(s){rows.push([match, s.period, s.team==='Wir'?usName():oppName(), s.team==='Wir'?'Offense':'Defense', s.zone, s.outcome]);});
+  state.shots.forEach(function(s){rows.push([match, s.period, s.minute==null?'':s.minute, s.team==='Wir'?usName():oppName(), s.team==='Wir'?'Offense':'Defense', s.zone, s.outcome, s.emptyNet?'ja':'']);});
   downloadCsv('floorball_schuesse.csv',rows);
 }
 function downloadSpecialCsv(){
@@ -1021,8 +1222,9 @@ function importData(evt){
 }
 function applyImported(imported){
     try{
-      state=Object.assign({teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, game:null, shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1}, imported);
+      state=Object.assign({teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, game:null, phase:'', emptyNet:false, shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1}, imported);
       state.pendingZone=null;
+      if(!state.phase) state.phase=hasGameData()?'play':'prep';
       if(!Array.isArray(state.specials)) state.specials=[];
       if(!Array.isArray(state.bullies)) state.bullies=[];
       if(!state.lineup||!Array.isArray(state.lineup.lines)) state.lineup=emptyLineup();
@@ -1052,8 +1254,8 @@ function newGame(btn){
     // alten Stand vor dem Löschen sichern; bei abgebrochener Sicherung bleibt alles unverändert
     (backedUp ? exportData() : Promise.resolve(true)).then(function(ok){
       if(!ok){showToast('Abgebrochen – Stand nicht gesichert, nichts gelöscht'); return;}
-      var keepRoster=state.roster.map(function(p){return {id:p.id, nr:p.nr, name:p.name, isCaptain:!!p.isCaptain, isGoalie:!!p.isGoalie, pos:p.pos||'', present:false, onField:false, events:[], smId:p.smId};});
-      state={teamUs:state.teamUs, teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, game:null, shots:[], specials:[], bullies:[], roster:keepRoster, lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:state.nextPlayerId};
+      var keepRoster=state.roster.map(function(p){return {id:p.id, nr:p.nr, name:p.name, isCaptain:!!p.isCaptain, isGoalie:!!p.isGoalie, pos:p.pos||'', present:false, onField:false, events:[], smId:p.smId, first:p.first, last:p.last};});
+      state={teamUs:state.teamUs, teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, game:null, phase:'prep', emptyNet:false, shots:[], specials:[], bullies:[], roster:keepRoster, lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:state.nextPlayerId};
       selectedSlot=null;
       save();
       document.getElementById('current-minute').value=0; syncControlsFromState(); renderAll();
@@ -1064,7 +1266,7 @@ function newGame(btn){
     setTimeout(function(){if(btn.dataset.confirm==='1'){btn.dataset.confirm='0'; btn.textContent='Neues Spiel'; btn.classList.remove('danger-confirm');}},3500);
   }
 }
-function renderAll(){renderField(); renderStats(); renderSpecials(); renderBullies(); renderRosterAll();}
+function renderAll(){renderField(); renderStats(); renderSpecials(); renderBullies(); renderRosterAll(); renderPhase();}
 
 load();
 // Browser bitten, den Speicher nicht automatisch zu räumen (hilft v.a. auf iPad/iPhone)
@@ -1072,7 +1274,7 @@ try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persis
 syncControlsFromState();
 updateMinuteCaption();
 renderAll();
-if(inWebApp()){document.getElementById('sm-section').style.display='block'; setDriveStatus('Drive: verbunden'); offerDriveRestore();}
+if(inWebApp()){document.body.classList.add('webapp'); setDriveStatus('Drive: verbunden'); offerDriveRestore();}
 renderGameInfo();
 </script>
 </body>

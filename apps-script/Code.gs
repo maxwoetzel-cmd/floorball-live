@@ -95,6 +95,26 @@ function getRoster() {
 }
 
 /**
+ * Aufstellung (Kader) eines bestimmten Spiels von USV Jena aus dem Saisonmanager.
+ * Die Liste ist leer, solange dort noch nichts eingetragen ist.
+ */
+function getGameLineup(gameId) {
+  gameId = parseInt(gameId, 10);
+  if (!gameId) throw new Error('Spiel-ID fehlt.');
+  var d = apiGet_('games/' + gameId);
+  var side = d.home_team_id === CONFIG.TEAM_ID ? 'home' : (d.guest_team_id === CONFIG.TEAM_ID ? 'guest' : '');
+  if (!side) throw new Error('Das ist kein Spiel von USV Jena.');
+  var players = ((d.players && d.players[side]) || []).map(function (p) {
+    return {
+      id: p.player_id, nr: p.trikot_number,
+      first: p.player_firstname || '', last: p.player_name || '',
+      goalie: !!p.goalkeeper || p.position === 'Tor', youth: !!p.youth
+    };
+  });
+  return { status: d.game_status, players: players };
+}
+
+/**
  * Schreibt eine Textdatei in den Ordner "Exporte".
  * overwrite=true: gleichnamige Datei wird aktualisiert (z. B. für den laufenden Spielstand).
  */
@@ -192,14 +212,28 @@ function testPfad() {
 }
 
 /**
- * Kader-Suche: Spiel-Detail eines beendeten Spiels (Beispiel-ID 57970). Zeigt die Feldnamen
- * und die Aufstellungen (players) mit Trikotnummern, soweit der Schlüssel das darf.
+ * Prüft das Spiel-Detail des nächsten, noch nicht beendeten Spiels von USV Jena:
+ * Ist die Aufstellung (players) schon vor dem Spiel gefüllt? Es werden nur Anzahlen und
+ * Feldnamen protokolliert, keine Namen.
  */
 function testKader() {
   try {
-    var game = apiGet_('games/57970');
-    Logger.log('Felder: ' + Object.keys(game).join(', '));
-    Logger.log('players => ' + JSON.stringify(game.players).slice(0, 2500));
+    var data = getSchedule();
+    var games = Array.isArray(data) ? data : ((data && data.games) || []);
+    var up = games.filter(function (g) {
+      return !g.ended && (g.home_team_id === CONFIG.TEAM_ID || g.guest_team_id === CONFIG.TEAM_ID);
+    }).sort(function (a, b) { return (a.date + ' ' + a.time) < (b.date + ' ' + b.time) ? -1 : 1; });
+    if (!up.length) { Logger.log('Kein kommendes Spiel gefunden.'); return; }
+    var g = up[0], d = apiGet_('games/' + g.game_id);
+    var side = g.home_team_id === CONFIG.TEAM_ID ? 'home' : 'guest';
+    var mine = (d.players && d.players[side]) || [];
+    var keys = {};
+    mine.forEach(function (p) { Object.keys(p).forEach(function (k) { keys[k] = true; }); });
+    Logger.log('Spiel ' + g.game_id + ' ' + g.date + ' ' + g.time + ', Status ' + d.game_status + ' / ' + d.ingame_status + ', unsere Seite: ' + side);
+    Logger.log('Spieler in der Aufstellung (unsere Seite): ' + mine.length);
+    Logger.log('Spielerfelder: ' + Object.keys(keys).join(', '));
+    Logger.log('starting_players: ' + JSON.stringify(d.starting_players).slice(0, 400));
+    Logger.log('Kapitän-Hinweise: ' + JSON.stringify(mine.filter(function (p) { return p.captain || p.is_captain; }).length));
   } catch (e) { Logger.log('FEHLER ' + e.message); }
 }
 
