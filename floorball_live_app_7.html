@@ -437,7 +437,7 @@ var FM={
   ALT:{title:'Alternative Aufstellung', n:5, kind:'line', names:{1:'Offense links', 2:'Center', 3:'Offense rechts', 4:'Defense links', 5:'Defense rechts'}}
 };
 // Lage der Positionen in Prozent (nach den Skizzen: Überzahl mit Tor oben, Unterzahl mit Tor unten)
-var FM_POS={pp:{1:[16,36],2:[16,88],3:[50,62],4:[84,72],5:[52,90]}, uz:{1:[63,61],2:[37,61],3:[50,40],4:[58,15]}, line:{1:[18,24],2:[50,46],3:[82,24],4:[32,80],5:[68,80]}};
+var FM_POS={pp:{1:[16,36],2:[16,88],3:[50,62],4:[84,72],5:[52,90]}, uz:{1:[63,61],2:[37,61],3:[50,40],4:[58,15]}};
 function newFm(){return {PP:{s:{},next:'L1'}, U1:{s:{},next:'L1'}, U2:{s:{},next:'L1'}, ALT:{s:{},next:''}};}
 function isFm(line){return line==='PP'||line==='U1'||line==='U2'||line==='ALT';}
 function emptyLineup(){return {goalie:null, extra:null, lines:[emptyLine(),emptyLine(),emptyLine()], fm:newFm()};}
@@ -908,6 +908,15 @@ function nextLabel(val){return {L1:'1. Reihe',L2:'2. Reihe',L3:'3. Reihe',ALT:'A
 function fmFieldHtml(key,modal,altMode){
   ensureFm();
   var f=FM[key], pos=FM_POS[f.kind];
+  if(f.kind==='line'){ // Alternative Aufstellung: gleiches Raster wie die Reihen 1-3, ohne Feld
+    var cell=function(i){
+      var pid=state.lineup.fm[key].s[i], p=pid!=null?playerById(pid):null;
+      var sel=altMode?(altSel===i):(!modal&&selectedSlot&&selectedSlot.line===key&&String(selectedSlot.pos)===String(i));
+      var click=modal?'':(altMode?' onclick="altSlot('+i+')"':' onclick="slotClick(\''+key+'\','+i+')"');
+      return '<div class="slot'+(p?' filled':'')+(sel?' selected':'')+'" data-slot="'+key+':'+i+'"'+click+'><span class="pos">'+esc(f.names[i]||i)+'</span><span class="who">'+(p?esc((p.nr?p.nr+' ':'')+shownName(p)):'+')+'</span></div>';
+    };
+    return '<div class="line-card" style="margin-top:6px;"><div class="slot-grid-off">'+cell(1)+cell(2)+cell(3)+'</div><div class="slot-grid-def">'+cell(4)+cell(5)+'</div></div>';
+  }
   var html='<div class="fm-field" style="aspect-ratio:'+LF_DIM[f.kind][0]+'/'+LF_DIM[f.kind][1]+';">'+fieldBgSvg(f.kind);
   for(var i=1;i<=f.n;i++){
     var pid=state.lineup.fm[key].s[i], p=pid!=null?playerById(pid):null;
@@ -1096,7 +1105,7 @@ function currentRows(){return state.currentTeam==='Wir'?ZONE_ROWS_OFF:ZONE_ROWS_
 // Spielfeld-Ausschnitt fuer Ueberzahl/Unterzahl/Alternative. Massstab: 20 m Feldbreite = 400 Einheiten (20 je Meter).
 // Nach Vorlage des Vereins: Der Torraum ist das grosse Rechteck (ca. 1,4 : 1). Darin liegen oben das Tor mit Netz und
 // direkt darunter der Schutzraum (kleines Rechteck). Der Ausschnitt ist offen (zur Mitte hin abgeschnitten).
-var LF_DIM={pp:[400,330], line:[400,300], uz:[400,340]};
+var LF_DIM={pp:[400,330], uz:[400,340]};
 function fieldBgSvg(kind){
   var d=LF_DIM[kind], w=d[0], h=d[1], top=(kind!=='uz'), S='stroke="#fff" fill="none"', p=[];
   var cx=w/2, BW=100, BH=72, GW=26, GH=12, SW=47, SH=20, off=30; // Torraum, Tor, Schutzraum, Abstand Bande-Torraum
