@@ -378,13 +378,25 @@
   </div>
 </section>
 
-<div id="fm-modal" onclick="if(event.target===this) hideFormation()" style="display:none; position:fixed; inset:0; z-index:20; background:rgba(10,12,14,0.94); overflow:auto; padding:12px;">
+<div id="fm-modal" onclick="if(event.target===this) hideFormation()" style="display:none; position:fixed; inset:0; z-index:20; background:rgba(10,12,14,0.99); overflow:auto; padding:12px;">
   <div style="max-width:720px; margin:0 auto;">
     <div class="row" style="justify-content:space-between; margin-bottom:8px; flex-wrap:nowrap;">
       <h2 id="fm-title" style="margin:0; font-size:20px; color:var(--text); text-transform:none; letter-spacing:0;"></h2>
       <button type="button" onclick="hideFormation()">Schließen ✕</button>
     </div>
     <div id="fm-body"></div>
+  </div>
+</div>
+
+<div id="alt-modal" style="display:none; position:fixed; inset:0; z-index:21; background:rgba(10,12,14,0.99); overflow:auto; padding:12px;">
+  <div style="max-width:720px; margin:0 auto;">
+    <h2 style="margin:0 0 4px; font-size:20px; color:var(--text); text-transform:none; letter-spacing:0;">Alternative Aufstellung</h2>
+    <p class="muted" style="margin:0 0 8px;">Gilt für Überzahl und Unterzahl, wenn dort "Alternative Aufstellung" als Danach gewählt ist.</p>
+    <div id="alt-body"></div>
+    <div class="row" style="margin-top:12px;">
+      <button type="button" class="primary" onclick="altSave()" style="flex:1;">Speichern</button>
+      <button type="button" onclick="altCancel()" style="flex:1;">Abbrechen</button>
+    </div>
   </div>
 </div>
 
@@ -396,7 +408,7 @@ var POS_LABELS={OL:'Offense links', C:'Center', OR:'Offense rechts', DL:'Defense
 function emptyLine(){return {OL:null,C:null,OR:null,DL:null,DR:null};}
 // Sonderformationen zum Ansagen: Überzahl (5 Feldspieler), Unterzahl 1 und 2 (je 4); Torwart ist immer dabei
 var FM={
-  PP:{title:'Überzahl', n:5, kind:'pp', names:{1:'Schuss links', 2:'Pass links', 3:'Center', 4:'Schuss rechts', 5:'Aufbau Point'}},
+  PP:{title:'Überzahl', n:5, kind:'pp', names:{1:'Pass links', 2:'Schuss links', 3:'Center', 4:'Schuss rechts', 5:'Aufbau Point'}},
   U1:{title:'Unterzahl 1', n:4, kind:'uz', names:{1:'Rechter Block', 2:'Linker Block', 3:'Center', 4:'Störer'}},
   U2:{title:'Unterzahl 2', n:4, kind:'uz', names:{1:'Rechter Block', 2:'Linker Block', 3:'Center', 4:'Störer'}},
   ALT:{title:'Alternative Aufstellung', n:5, kind:'line', names:{1:'Offense links', 2:'Center', 3:'Offense rechts', 4:'Defense links', 5:'Defense rechts'}}
@@ -841,25 +853,57 @@ function updateSmPolling(){
 }
 /* ---------- Sonderformationen: Überzahl, Unterzahl 1/2 (zum Ansagen) ---------- */
 function nextLabel(val){return {L1:'1. Reihe',L2:'2. Reihe',L3:'3. Reihe',ALT:'Alternative Aufstellung',PP:'Überzahl',U1:'Unterzahl 1',U2:'Unterzahl 2'}[val]||'';}
-function fmFieldHtml(key,modal){
+function fmFieldHtml(key,modal,altMode){
   ensureFm();
   var f=FM[key], pos=FM_POS[f.kind];
   var html='<div class="fm-field" style="height:'+(f.kind==='pp'?250:(f.kind==='uz'?300:230))+'px;">'+
     (f.kind==='pp'?'<div class="fm-goal" style="top:3%;left:38%;width:24%;height:15%;"></div>':(f.kind==='uz'?'<div class="fm-goal" style="top:80%;left:40%;width:20%;height:13%;"></div>':''));
   for(var i=1;i<=f.n;i++){
     var pid=state.lineup.fm[key].s[i], p=pid!=null?playerById(pid):null;
-    var sel=!modal&&selectedSlot&&selectedSlot.line===key&&String(selectedSlot.pos)===String(i);
-    html+='<div class="fm-slot'+(p?' filled':'')+(sel?' selected':'')+'" style="left:'+pos[i][0]+'%; top:'+pos[i][1]+'%;'+(f.kind==='uz'?' width:24%;':(f.kind==='line'?' width:27%;':''))+'"'+(modal?'':' onclick="slotClick(\''+key+'\','+i+')"')+'>'+
+    var sel=altMode?(altSel===i):(!modal&&selectedSlot&&selectedSlot.line===key&&String(selectedSlot.pos)===String(i));
+    var click=modal?'':(altMode?' onclick="altSlot('+i+')"':' onclick="slotClick(\''+key+'\','+i+')"');
+    html+='<div class="fm-slot'+(p?' filled':'')+(sel?' selected':'')+'" style="left:'+pos[i][0]+'%; top:'+pos[i][1]+'%;'+(f.kind==='uz'?' width:24%;':(f.kind==='line'?' width:27%;':''))+'"'+click+'>'+
       '<span class="fm-num">'+esc(f.names[i]||i)+'</span><span>'+(p?esc((p.nr?p.nr+' ':'')+shownName(p)):'+')+'</span></div>';
   }
   return html+'</div>';
 }
 function fmNextHtml(key){
   var cur=state.lineup.fm[key].next||'';
-  var opts=[['L1','1. Reihe'],['L2','2. Reihe'],['L3','3. Reihe'],['ALT','Alternative Aufstellung']];
+  var opts=[['L1','1. Reihe'],['L2','2. Reihe'],['L3','3. Reihe'],['ALT','Alternative Aufstellung ✎']];
   return '<div class="fm-next"><span>Danach:</span>'+opts.map(function(o){
-    return '<button type="button" class="'+(cur===o[0]?'active':'')+'" onclick="setFmNext(\''+key+'\',\''+o[0]+'\')">'+o[1]+'</button>';
+    var act=o[0]==='ALT'?'openAltEditor(\''+key+'\')':'setFmNext(\''+key+'\',\''+o[0]+'\')';
+    return '<button type="button" class="'+(cur===o[0]?'active':'')+'" onclick="'+act+'">'+o[1]+'</button>';
   }).join('')+'</div>';
+}
+// Alternative Aufstellung: Eingabe im Fenster, "Speichern" übernimmt, "Abbrechen" verwirft die Änderungen
+var altSel=null, altSnapshot='', altKey='', altPrevNext='';
+function openAltEditor(key){
+  ensureFm(); altKey=key; altPrevNext=state.lineup.fm[key].next||'L1';
+  altSnapshot=JSON.stringify(state.lineup.fm.ALT.s); altSel=null;
+  state.lineup.fm[key].next='ALT';
+  renderAltModal(); document.getElementById('alt-modal').style.display='block';
+}
+function renderAltModal(){
+  ensureFm();
+  var body=fmFieldHtml('ALT',false,true);
+  if(altSel){
+    var avail=availableForSlot({line:'ALT',pos:altSel});
+    body+='<p class="muted" style="margin:8px 0 4px;">'+esc(FM.ALT.names[altSel])+': Spieler wählen</p><div class="chip-grid">'+
+      (avail.length?avail.map(function(p){return '<span class="pick-chip" onclick="altSet('+p.id+')">'+esc(playerLabel(p))+'</span>';}).join(' '):'<span class="muted">Keine weiteren anwesenden Feldspieler.</span>')+'</div>'+
+      '<div class="row" style="margin-top:8px;"><button type="button" onclick="altClear()" style="flex:1;">Platz leeren</button></div>';
+  } else body+='<p class="muted" style="margin:8px 0 0;">Platz antippen, dann den Spieler wählen.</p>';
+  document.getElementById('alt-body').innerHTML=body;
+}
+function altSlot(i){altSel=i; renderAltModal();}
+function altSet(pid){ensureFm(); state.lineup.fm.ALT.s[altSel]=pid; altSel=null; renderAltModal();}
+function altClear(){ensureFm(); delete state.lineup.fm.ALT.s[altSel]; altSel=null; renderAltModal();}
+function altSave(){
+  document.getElementById('alt-modal').style.display='none'; altSel=null;
+  save(); renderLineup(); renderPrepExtras(); showToast('Alternative Aufstellung gespeichert');
+}
+function altCancel(){
+  ensureFm(); state.lineup.fm.ALT.s=JSON.parse(altSnapshot||'{}'); if(altKey) state.lineup.fm[altKey].next=altPrevNext;
+  document.getElementById('alt-modal').style.display='none'; altSel=null; renderLineup();
 }
 function setFmNext(key,val){ensureFm(); state.lineup.fm[key].next=val; save(); renderLineup();}
 function lineNamesHtml(i){
@@ -1389,6 +1433,7 @@ function renderLineup(){
   }
   ensureFm();
   Object.keys(FM).forEach(function(k){
+    if(k==='ALT') return; // Alternative Aufstellung wird über den Knopf bei "Danach" eingegeben
     html+='<div class="line-card"><p class="line-title">'+FM[k].title+' ('+FM[k].n+' Feldspieler + Torwart)</p>'+fmFieldHtml(k,false)+(k==='ALT'?'':fmNextHtml(k))+'</div>';
   });
   el.innerHTML=html;
