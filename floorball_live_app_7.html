@@ -12,7 +12,7 @@
     --bg:#14181b; --panel:#1e2327; --panel-alt:#252b30; --border:#2c3338;
     --text:#edeff0; --text-secondary:#9aa5ab; --text-muted:#8c979d;
     --wir:#378add; --gegner:#d85a30; --danger:#e05a5a; --ok:#3fae6b; --radius:10px;
-    --field:#1f7bc4; --accent:#f2b84b; --white:#ffffff;
+    --field:#002d5a; --accent:#f2b84b; --white:#ffffff;
   }
   *{box-sizing:border-box;}
   body{margin:0; background:var(--bg); color:var(--text);
@@ -67,10 +67,6 @@
   .dot{width:12px; height:12px; border-radius:50%; display:inline-block;}
   .line-card{background:var(--field); border-radius:12px; padding:12px 10px; margin-top:10px;}
   .line-title{color:#fff; font-size:12px; font-weight:600; margin:0 0 8px; opacity:0.85; text-transform:uppercase; letter-spacing:0.04em;}
-  .slot-grid-off{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:10px;}
-  .slot-grid-off{align-items:start;}
-  .slot-grid-off > :nth-child(2){margin-top:22px;} /* Center ein Stueck hinter den Offense-Spielern */
-  .slot-grid-def{display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:0 12%;}
   .slot{background:rgba(255,255,255,0.14); border:1.5px dashed rgba(255,255,255,0.55); color:#fff;
     border-radius:10px; padding:6px 4px; min-height:52px; cursor:pointer; text-align:center;
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;}
@@ -143,7 +139,9 @@
     body.phase-play #sec-shot > .row{margin-bottom:6px !important;}
     body.phase-play .col-left{top:62px;}
   }
-  .fm-field{position:relative; background:var(--field); border-radius:12px; margin:6px 0 4px; border:2px solid rgba(255,255,255,0.5);}
+  .fm-field{position:relative; background:var(--field); border-radius:12px; margin:6px auto 4px; max-width:480px; overflow:hidden;}
+  .fm-bg{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none;}
+  .lf-field .slot{position:absolute; width:27%; transform:translate(-50%,-50%); min-height:50px;}
   .fm-goal{position:absolute; border:2px solid #fff; border-radius:3px; opacity:0.85; pointer-events:none;}
   .fm-slot{position:absolute; width:28%; transform:translate(-50%,-50%); min-height:46px; padding:4px 2px; text-align:center; border-radius:10px;
     background:rgba(255,255,255,0.14); border:1.5px dashed rgba(255,255,255,0.6); color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; font-size:13px;}
@@ -908,8 +906,7 @@ function nextLabel(val){return {L1:'1. Reihe',L2:'2. Reihe',L3:'3. Reihe',ALT:'A
 function fmFieldHtml(key,modal,altMode){
   ensureFm();
   var f=FM[key], pos=FM_POS[f.kind];
-  var html='<div class="fm-field" style="height:'+(f.kind==='pp'?250:(f.kind==='uz'?300:230))+'px;">'+
-    (f.kind==='pp'?'<div class="fm-goal" style="top:3%;left:38%;width:24%;height:15%;"></div>':(f.kind==='uz'?'<div class="fm-goal" style="top:80%;left:40%;width:20%;height:13%;"></div>':''));
+  var html='<div class="fm-field" style="height:'+(f.kind==='pp'?250:(f.kind==='uz'?300:230))+'px;">'+fieldBgSvg(f.kind==='uz'?'defense':'offense');
   for(var i=1;i<=f.n;i++){
     var pid=state.lineup.fm[key].s[i], p=pid!=null?playerById(pid):null;
     var sel=altMode?(altSel===i):(!modal&&selectedSlot&&selectedSlot.line===key&&String(selectedSlot.pos)===String(i));
@@ -1094,10 +1091,15 @@ function setTeam(btn){
 }
 function currentRows(){return state.currentTeam==='Wir'?ZONE_ROWS_OFF:ZONE_ROWS_DEF;}
 
-function fieldBaseSvg(orientation){
+// Spielfeld-Hintergrund fuer Aufstellungen: gleiche Zeichnung wie das Schussfeld, ohne Zonenlinien.
+// Offense = Tor oben (Ausschnitt von oben), Defense = Tor unten (Ausschnitt von unten).
+function fieldBgSvg(orientation){
+  return '<svg class="fm-bg" viewBox="0 0 440 470" preserveAspectRatio="'+(orientation==='offense'?'xMidYMin':'xMidYMax')+' slice" xmlns="http://www.w3.org/2000/svg">'+fieldBaseSvg(orientation,true)+'</svg>';
+}
+function fieldBaseSvg(orientation,plain){
   var W=440,H=470,parts=[];
-  parts.push('<rect x="8" y="8" width="'+(W-16)+'" height="'+(H-16)+'" rx="40" fill="#1f7bc4" stroke="#ffffff" stroke-width="4"></rect>');
-  [[60,60],[W-60,60],[60,H-60],[W-60,H-60]].forEach(function(p){
+  parts.push('<rect x="8" y="8" width="'+(W-16)+'" height="'+(H-16)+'" rx="40" fill="#002d5a" stroke="#ffffff" stroke-width="4"></rect>');
+  if(!plain) [[60,60],[W-60,60],[60,H-60],[W-60,H-60]].forEach(function(p){
     parts.push('<g stroke="#ffffff" stroke-width="4" stroke-linecap="round"><line x1="'+(p[0]-10)+'" y1="'+p[1]+'" x2="'+(p[0]+10)+'" y2="'+p[1]+'"></line><line x1="'+p[0]+'" y1="'+(p[1]-10)+'" x2="'+p[0]+'" y2="'+(p[1]+10)+'"></line></g>');
   });
   if(orientation==='offense'){
@@ -1113,6 +1115,7 @@ function fieldBaseSvg(orientation){
     parts.push('<rect x="'+(W/2-48)+'" y="'+(H-86)+'" width="96" height="52" fill="none" stroke="#ffffff" stroke-width="2.5"></rect>');
     parts.push('<rect x="'+(W/2-20)+'" y="'+(H-40)+'" width="40" height="16" fill="none" stroke="#ffffff" stroke-width="3"></rect>');
   }
+  if(plain) return parts.join('');
   [149,291].forEach(function(x){parts.push('<line x1="'+x+'" y1="8" x2="'+x+'" y2="'+(H-8)+'" stroke="rgba(255,255,255,0.30)" stroke-width="1" stroke-dasharray="4,4"></line>');});
   [159,311].forEach(function(y){parts.push('<line x1="8" y1="'+y+'" x2="'+(W-8)+'" y2="'+y+'" stroke="rgba(255,255,255,0.30)" stroke-width="1" stroke-dasharray="4,4"></line>');});
   return parts.join('');
@@ -1514,7 +1517,8 @@ function benchDrop(ev){
 function dragOverHandler(ev){ev.preventDefault(); ev.currentTarget.classList.add('dragover');}
 function dragLeaveHandler(ev){ev.currentTarget.classList.remove('dragover');}
 
-function slotHtml(lineIdx,pos){
+var LINE_POS={OL:[20,24],C:[50,44],OR:[80,24],DL:[33,76],DR:[67,76]}; // Prozent im Feld, Tor oben
+function slotHtml(lineIdx,pos,xy){
   var val=lineIdx==='G'?state.lineup.goalie:(lineIdx==='X'?state.lineup.extra:state.lineup.lines[lineIdx][pos]);
   var p=playerById(val);
   var isSel=selectedSlot&&selectedSlot.line===lineIdx&&selectedSlot.pos===pos;
@@ -1522,7 +1526,7 @@ function slotHtml(lineIdx,pos){
   var posLabel=lineIdx==='G'?'Goalie':(lineIdx==='X'?'6. Feldspieler':POS_LABELS[pos]);
   var who=p?playerLabel(p):'+';
   var lineArg=(lineIdx==='G'||lineIdx==='X')?"'"+lineIdx+"'":lineIdx;
-  return '<div class="'+cls+'" data-slot="'+lineIdx+':'+pos+'" onclick="slotClick('+lineArg+',\''+pos+'\')" '+
+  return '<div class="'+cls+'"'+(xy?' style="left:'+xy[0]+'%; top:'+xy[1]+'%;"':'')+' data-slot="'+lineIdx+':'+pos+'" onclick="slotClick('+lineArg+',\''+pos+'\')" '+
     'ondragover="dragOverHandler(event)" ondragleave="dragLeaveHandler(event)" ondrop="slotDrop(event,'+lineArg+',\''+pos+'\')">'+
     '<span class="pos">'+posLabel+'</span><span class="who">'+who+'</span></div>';
 }
@@ -1532,8 +1536,8 @@ function renderLineup(){
   if(state.emptyNet) html+='<div class="line-card"><p class="line-title clickable" onclick="togglePool(\'X\')">Empty Net – 6. Feldspieler '+poolMark('X')+'</p><div class="goalie-wrap">'+slotHtml('X','X')+'</div>'+poolHtml('X')+'</div>';
   for(var i=0;i<3;i++){
     html+='<div class="line-card"><p class="line-title clickable" onclick="togglePool(\'L'+i+'\')">'+(i+1)+'. Reihe '+poolMark('L'+i)+'</p>'+
-      '<div class="slot-grid-off">'+slotHtml(i,'OL')+slotHtml(i,'C')+slotHtml(i,'OR')+'</div>'+
-      '<div class="slot-grid-def">'+slotHtml(i,'DL')+slotHtml(i,'DR')+'</div>'+poolHtml('L'+i)+'</div>';
+      '<div class="fm-field lf-field" style="height:270px;">'+fieldBgSvg('offense')+
+      ['OL','C','OR','DL','DR'].map(function(k){return slotHtml(i,k,LINE_POS[k]);}).join('')+'</div>'+poolHtml('L'+i)+'</div>';
   }
   ensureFm();
   Object.keys(FM).forEach(function(k){

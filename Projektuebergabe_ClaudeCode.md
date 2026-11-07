@@ -69,6 +69,10 @@ Verantwortlich: Max Woetzel (Head-Coach Herren).
 - Design-Runde 08.11.2026 (Tablet in der Halle): höherer Kontrast für `--text-muted`, größere Kleinschrift, Spielstand 40 px,
   Empty-Net-Badge in Amber (`--accent`) statt Rot, Toast oben, Vibration plus Toast nach jedem erfassten Schuss.
   Offen: Vereinslogo (blau/weiß) als Inline-SVG/Base64, Schussmarker-Form nach Ergebnis, Stat-Tabellen (Zebra/Balken).
+- Spielfelder (08.11.2026): Feldfarbe = Vereinsblau `#002d5a` (CD-Richtlinie, RGB 0/45/90; Magenta bewusst nicht verwendet).
+  Aufstellungen (Reihen 1–3, Überzahl, Unterzahl 1/2, Alternative) zeigen ein Feld mit Linien als Hintergrund
+  (`fieldBgSvg`, gleiche Zeichnung wie das Schussfeld via `fieldBaseSvg(orientation, plain)`). Reihen: Offense links/rechts
+  vor dem Center (`LINE_POS`). Überzahl/Alternative: Tor oben, Unterzahl: Tor unten.
 
 **Getestet** wurde mit simulierten Daten im Browser und mit Node (Syntax, Rechenlogik). **Nicht getestet:** echtes Spiel, echtes Tablet,
 Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie bei beendeten Spielen angenommen), Strafen live.
