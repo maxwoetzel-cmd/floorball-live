@@ -167,7 +167,7 @@
     </div>
     <div style="flex:1; min-width:120px;">
       <label class="muted" style="display:block; margin-bottom:4px;">Gegner</label>
-      <input type="text" id="team-opp" placeholder="Gegner" oninput="state.teamOpp=this.value; save(); renderStats();">
+      <input type="text" id="team-opp" placeholder="Gegner" onfocus="onOppFocus()" onclick="onOppFocus()" onblur="oppTyping=false" oninput="state.teamOpp=this.value; save(); renderStats();">
     </div>
   </div>
   <div class="seg" id="jersey-seg" style="margin-bottom:10px;">
@@ -176,8 +176,14 @@
   </div>
   <div class="web-only">
     <p class="muted" id="sm-current" style="margin:0 0 8px;"></p>
-    <button type="button" onclick="loadGames()" style="width:100%;">Spielplan aus dem Saisonmanager laden</button>
-    <div id="sm-list" style="margin-top:10px;"></div>
+    <div id="sm-panel" style="display:none;">
+      <div class="row" style="margin-bottom:8px;">
+        <button type="button" onclick="loadGames()" style="flex:1;">Spielplan neu laden</button>
+        <button type="button" onclick="typeOpponent()" style="flex:1;">Gegner selbst eintippen</button>
+        <button type="button" onclick="closeGameList()" style="flex:0 0 auto;">Schließen ✕</button>
+      </div>
+      <div id="sm-list"></div>
+    </div>
   </div>
 </section>
 
@@ -1143,11 +1149,25 @@ function renderGameInfo(){
   var g=state.game;
   el.textContent=g?('Gewählt: '+fmtDate(g.date)+' '+(g.time||'')+' · '+(g.isHome?'Heim':'Auswärts')+' gegen '+g.opponent+' · '+(g.arena||'')):'Noch kein Spiel gewählt.';
 }
+// Spielliste: öffnet beim Antippen des Feldes "Gegner", schließt nach der Auswahl oder mit "Schließen"
+var smLoading=false, oppTyping=false;
+function onOppFocus(){if(inWebApp()&&!oppTyping) openGameList();}
+function openGameList(){
+  var p=document.getElementById('sm-panel'); if(!p) return;
+  p.style.display='block';
+  if(!smGames.length&&!smLoading) loadGames();
+}
+function closeGameList(){var p=document.getElementById('sm-panel'); if(p) p.style.display='none';}
+function typeOpponent(){
+  var i=document.getElementById('team-opp');
+  oppTyping=true; closeGameList(); i.removeAttribute('inputmode'); i.blur(); i.focus();
+}
 function loadGames(){
   var list=document.getElementById('sm-list');
+  smLoading=true;
   list.innerHTML='<p class="muted">Lade Spielplan …</p>';
-  gsRun('getGames').then(function(games){smGames=games||[]; renderGames();})
-    .catch(function(e){list.innerHTML='<p class="muted" style="color:var(--danger);">Spielplan nicht geladen: '+esc(e.message)+'</p>';});
+  gsRun('getGames').then(function(games){smLoading=false; smGames=games||[]; renderGames();})
+    .catch(function(e){smLoading=false; list.innerHTML='<p class="muted" style="color:var(--danger);">Spielplan nicht geladen: '+esc(e.message)+'</p>';});
 }
 function renderGames(){
   var list=document.getElementById('sm-list');
@@ -1167,6 +1187,7 @@ function pickGame(id){
   state.teamOpp=g.opponent;
   document.getElementById('team-opp').value=g.opponent;
   save(); renderStats(); renderGameInfo(); renderGames(); renderRosterAll();
+  closeGameList();
   showToast('Spiel gewählt: '+g.opponent);
 }
 // ---- Kader: Stammkader (Drive, kader.json) und Saisonmanager ----
@@ -1421,7 +1442,11 @@ try{ if(navigator.storage && navigator.storage.persist) navigator.storage.persis
 syncControlsFromState();
 updateMinuteCaption();
 renderAll();
-if(inWebApp()){document.body.classList.add('webapp'); setDriveStatus('Drive: verbunden'); offerDriveRestore();}
+if(inWebApp()){
+  document.body.classList.add('webapp'); setDriveStatus('Drive: verbunden'); offerDriveRestore();
+  // Antippen von "Gegner" öffnet die Spielliste (ohne Bildschirmtastatur; selbst tippen über "Gegner selbst eintippen")
+  var oppIn=document.getElementById('team-opp'); oppIn.setAttribute('inputmode','none'); oppIn.placeholder='Gegner – antippen für Spielplan';
+}
 renderGameInfo();
 </script>
 </body>
