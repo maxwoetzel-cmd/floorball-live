@@ -161,6 +161,10 @@
       <input type="text" id="team-opp" placeholder="Gegner" oninput="state.teamOpp=this.value; save(); renderStats();">
     </div>
   </div>
+  <div class="seg" id="jersey-seg" style="margin-bottom:10px;">
+    <button type="button" data-j="weiss" onclick="setJersey('weiss')">Trikot weiß</button>
+    <button type="button" data-j="blau" onclick="setJersey('blau')">Trikot blau</button>
+  </div>
   <div class="web-only">
     <p class="muted" id="sm-current" style="margin:0 0 8px;"></p>
     <button type="button" onclick="loadGames()" style="width:100%;">Spielplan aus dem Saisonmanager laden</button>
@@ -317,7 +321,7 @@ function emptyLineup(){return {goalie:null, extra:null, lines:[emptyLine(),empty
 
 var state={
   teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir',
-  pendingZone:null, minute:0, game:null, phase:'prep', emptyNet:false, shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(),
+  pendingZone:null, minute:0, game:null, phase:'prep', emptyNet:false, jersey:'weiss', shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(),
   nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1
 };
 var selectedSlot=null;
@@ -338,6 +342,7 @@ function load(){
     state.pendingZone=null; // halbfertige Schuss-Auswahl nicht über einen Reload mitnehmen
     state.minute=parseInt(state.minute)||0;
     state.emptyNet=!!state.emptyNet;
+    if(!state.jersey) state.jersey='weiss';
     if(!state.phase) state.phase=(state.shots.length||state.specials.length||state.bullies.length)?'play':'prep'; // Stand aus früherer Version
   }catch(e){}
 }
@@ -369,9 +374,33 @@ function isLive(){return state.phase==='play';}
 function computeScore(){var r={Wir:0,Gegner:0}; state.shots.forEach(function(x){if(x.outcome==='Tor') r[x.team]++;}); return r;}
 function zoneLabel(z){
   var m=String(z).split('-');
-  var r={tornah:'nah am Tor',zentral:'Mitte',fern:'weit weg'}[m[0]]||m[0];
+  var r={tornah:'Kurzdistanz',zentral:'Mitteldistanz',fern:'Langdistanz'}[m[0]]||m[0];
   var c={links:'links',mitte:'Mitte',rechts:'rechts'}[m[1]]||m[1];
   return r+' · '+c;
+}
+// Beschriftung der drei Zonenreihen direkt auf dem Spielfeld
+function zoneRowLabels(){
+  var names={tornah:'Kurzdistanz',zentral:'Mitteldistanz',fern:'Langdistanz'};
+  return currentRows().map(function(r){
+    return '<text x="20" y="'+(r.y+24)+'" font-size="14" fill="rgba(255,255,255,0.6)" style="pointer-events:none">'+names[r.key]+'</text>';
+  }).join('');
+}
+// Trikotfarbe: manche Spieler tragen je nach Trikotsatz (blau/weiß) eine andere Nummer
+function updateJerseyButtons(){document.querySelectorAll('#jersey-seg button').forEach(function(b){b.classList.toggle('active', b.dataset.j===(state.jersey||'weiss'));});}
+function jerseyNr(r){return state.jersey==='blau'?(r.nrBlau||r.nrWeiss||r.nr||''):(r.nrWeiss||r.nrBlau||r.nr||'');}
+function applyJersey(){state.roster.forEach(function(r){if(r.nrBlau||r.nrWeiss) r.nr=String(jerseyNr(r));});}
+function setJersey(j){state.jersey=j; applyJersey(); save(); renderRosterAll(); updateJerseyButtons();}
+function setJerseyNumbers(r,p){
+  var w=(p.nrWeiss!=null&&p.nrWeiss!=='')?String(p.nrWeiss):((p.nr!=null&&p.nr!=='')?String(p.nr):'');
+  var b=(p.nrBlau!=null&&p.nrBlau!=='')?String(p.nrBlau):w;
+  if(w||b){r.nrWeiss=w||b; r.nrBlau=b||w; r.nr=String(jerseyNr(r));}
+}
+function setLineupNr(r,nr){
+  if(nr==null||nr==='') return;
+  nr=String(nr); r.nr=nr;
+  if(state.jersey==='blau') r.nrBlau=nr; else r.nrWeiss=nr;
+  if(!r.nrBlau) r.nrBlau=nr;
+  if(!r.nrWeiss) r.nrWeiss=nr;
 }
 function updateTopbar(){
   var sc=computeScore();
@@ -396,7 +425,7 @@ function renderPhase(){
     else{btn.textContent='Spiel beenden';}
   } else {btn.textContent='Zurück zur Pause'; btn.className='phase-btn'; label='Spiel beendet';}
   document.getElementById('tb-period').textContent=label;
-  updateTopbar(); updateMinuteCaption();
+  updateTopbar(); updateMinuteCaption(); updateJerseyButtons();
 }
 var confirmEndTimer=null;
 function phaseMain(){
@@ -518,7 +547,7 @@ function renderField(){
   var orientation=state.currentTeam==='Wir'?'offense':'defense';
   document.getElementById('view-label').textContent = orientation==='offense'
     ? 'Offense – wir greifen an, Tor oben' : 'Defense – Gegner greift an, unser Tor unten';
-  svg.innerHTML=fieldBaseSvg(orientation)+'<g id="shots-layer"></g><g id="zones-layer"></g>';
+  svg.innerHTML=fieldBaseSvg(orientation)+zoneRowLabels()+'<g id="shots-layer"></g><g id="zones-layer"></g>';
   var svgns='http://www.w3.org/2000/svg';
   var zlayer=document.getElementById('zones-layer');
   var rows=currentRows();
@@ -731,6 +760,7 @@ function updatePlayerField(id,field,value){
   var p=playerById(id); if(!p)return;
   if(field==='isCaptain'||field==='isGoalie') value=!!value;
   p[field]=value;
+  if(field==='nr'){if(state.jersey==='blau') p.nrBlau=value; else p.nrWeiss=value;}
   if(field==='isGoalie'&&value) p.pos='';
   save();
   // Bei Texteingabe (Nr/Name) die Bearbeitungsliste nicht neu zeichnen, sonst verliert das Feld den Fokus
@@ -1044,8 +1074,10 @@ function findRosterMatch(p){
   });
 }
 function newRosterPlayer(p,name,present){
-  return {id:state.nextPlayerId++, nr:p.nr==null?'':String(p.nr), name:name, first:p.first||'', last:p.last||name,
+  var r={id:state.nextPlayerId++, nr:'', name:name, first:p.first||'', last:p.last||name,
     isCaptain:!!p.captain, isGoalie:!!p.goalie, pos:p.goalie?'':(p.pos||''), present:!!present, onField:false, events:[]};
+  setJerseyNumbers(r,p);
+  return r;
 }
 function loadStammkader(silent){
   return gsRun('readFile',['kader.json']).then(function(text){
@@ -1055,7 +1087,7 @@ function loadStammkader(silent){
       var p=o.p, ex=findRosterMatch(p);
       if(ex){
         ex.first=p.first||ex.first; ex.last=p.last||ex.last; ex.name=o.name;
-        if(p.nr!=null&&p.nr!=='') ex.nr=String(p.nr);
+        setJerseyNumbers(ex,p);
         ex.isGoalie=!!p.goalie; ex.pos=p.goalie?'':(p.pos||ex.pos||''); ex.isCaptain=!!p.captain; updated++;
       } else {state.roster.push(newRosterPlayer(p,o.name,false)); added++;}
     });
@@ -1065,7 +1097,7 @@ function loadStammkader(silent){
 function saveStammkader(){
   if(!state.roster.length){showToast('Kader ist leer'); return;}
   if(!confirm('Den aktuellen Kader als Stammkader in Drive speichern? Der bisherige Stammkader wird überschrieben.')) return;
-  var list=sortedRoster().map(function(r){return {nr:String(r.nr||''), first:r.first||'', last:r.last||r.name||'', goalie:!!r.isGoalie, pos:r.pos||'', captain:!!r.isCaptain};});
+  var list=sortedRoster().map(function(r){return {nr:String(r.nrWeiss||r.nr||''), nrWeiss:String(r.nrWeiss||r.nr||''), nrBlau:String(r.nrBlau||r.nr||''), first:r.first||'', last:r.last||r.name||'', goalie:!!r.isGoalie, pos:r.pos||'', captain:!!r.isCaptain};});
   gsRun('saveFile',['kader.json', JSON.stringify({version:1, players:list}, null, 1), true])
     .then(function(){showToast('Stammkader gespeichert ('+list.length+' Spieler)');})
     .catch(function(e){showToast('Speichern fehlgeschlagen: '+e.message);});
@@ -1086,7 +1118,7 @@ function applySmRoster(){
   var added=0, updated=0;
   displayNames(smRoster).forEach(function(o){
     var p=o.p, ex=findRosterMatch(p);
-    if(ex){ex.smId=p.id; ex.first=ex.first||p.first; ex.last=ex.last||p.last; if(p.nr!=null) ex.nr=String(p.nr); if(p.goalie){ex.isGoalie=true; ex.pos='';} updated++;}
+    if(ex){ex.smId=p.id; ex.first=ex.first||p.first; ex.last=ex.last||p.last; if(p.nr!=null && !ex.nrWeiss && !ex.nrBlau) setLineupNr(ex,p.nr); if(p.goalie){ex.isGoalie=true; ex.pos='';} updated++;}
     else{var np=newRosterPlayer(p,o.name,false); np.smId=p.id; state.roster.push(np); added++;}
   });
   save(); renderRosterAll();
@@ -1104,7 +1136,7 @@ function loadSmLineup(){
       var p=o.p, ex=findRosterMatch(p);
       if(!ex){ex=newRosterPlayer(p,o.name,true); state.roster.push(ex); added++;}
       ex.smId=p.id; ex.first=ex.first||p.first; ex.last=ex.last||p.last;
-      if(p.nr!=null) ex.nr=String(p.nr);
+      setLineupNr(ex,p.nr);
       if(p.goalie){ex.isGoalie=true; ex.pos='';}
       matched[ex.id]=true;
     });
@@ -1174,7 +1206,7 @@ function saveFile(blob,filename){
 function downloadShotsCsv(){
   var rows=[['Spiel','Drittel','Minute','Team','Ansicht','Zone','Ergebnis','Empty Net']];
   var match=usName()+' vs '+oppName();
-  state.shots.forEach(function(s){rows.push([match, s.period, s.minute==null?'':s.minute, s.team==='Wir'?usName():oppName(), s.team==='Wir'?'Offense':'Defense', s.zone, s.outcome, s.emptyNet?'ja':'']);});
+  state.shots.forEach(function(s){rows.push([match, s.period, s.minute==null?'':s.minute, s.team==='Wir'?usName():oppName(), s.team==='Wir'?'Offense':'Defense', zoneLabel(s.zone), s.outcome, s.emptyNet?'ja':'']);});
   downloadCsv('floorball_schuesse.csv',rows);
 }
 function downloadSpecialCsv(){
@@ -1222,7 +1254,7 @@ function importData(evt){
 }
 function applyImported(imported){
     try{
-      state=Object.assign({teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, game:null, phase:'', emptyNet:false, shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1}, imported);
+      state=Object.assign({teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, game:null, phase:'', emptyNet:false, jersey:'weiss', shots:[], specials:[], bullies:[], roster:[], lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:1}, imported);
       state.pendingZone=null;
       if(!state.phase) state.phase=hasGameData()?'play':'prep';
       if(!Array.isArray(state.specials)) state.specials=[];
@@ -1254,8 +1286,8 @@ function newGame(btn){
     // alten Stand vor dem Löschen sichern; bei abgebrochener Sicherung bleibt alles unverändert
     (backedUp ? exportData() : Promise.resolve(true)).then(function(ok){
       if(!ok){showToast('Abgebrochen – Stand nicht gesichert, nichts gelöscht'); return;}
-      var keepRoster=state.roster.map(function(p){return {id:p.id, nr:p.nr, name:p.name, isCaptain:!!p.isCaptain, isGoalie:!!p.isGoalie, pos:p.pos||'', present:false, onField:false, events:[], smId:p.smId, first:p.first, last:p.last};});
-      state={teamUs:state.teamUs, teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, game:null, phase:'prep', emptyNet:false, shots:[], specials:[], bullies:[], roster:keepRoster, lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:state.nextPlayerId};
+      var keepRoster=state.roster.map(function(p){return {id:p.id, nr:p.nr, name:p.name, isCaptain:!!p.isCaptain, isGoalie:!!p.isGoalie, pos:p.pos||'', present:false, onField:false, events:[], smId:p.smId, first:p.first, last:p.last, nrBlau:p.nrBlau, nrWeiss:p.nrWeiss};});
+      state={teamUs:state.teamUs, teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, game:null, phase:'prep', emptyNet:false, jersey:state.jersey||'weiss', shots:[], specials:[], bullies:[], roster:keepRoster, lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:state.nextPlayerId};
       selectedSlot=null;
       save();
       document.getElementById('current-minute').value=0; syncControlsFromState(); renderAll();
