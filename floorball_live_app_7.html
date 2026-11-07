@@ -251,8 +251,8 @@
     <section id="sec-quick" data-ph="play">
       <h2>Schnelltasten</h2>
       <div class="row">
-        <button type="button" class="ok" onclick="addBully(true)" style="flex:1;">Bully gewonnen</button>
-        <button type="button" onclick="addBully(false)" style="flex:1;">Bully verloren</button>
+        <button type="button" class="ok" id="bully-won-btn" onclick="addBully(true)" style="flex:1;">Bully gewonnen · 0</button>
+        <button type="button" id="bully-lost-btn" onclick="addBully(false)" style="flex:1;">Bully verloren · 0</button>
         <button type="button" onclick="undoBully()" style="flex:0 0 auto;">Rückgängig</button>
       </div>
       <div class="row" style="margin-top:8px;">
@@ -768,8 +768,18 @@ function renderShots(){
 function addBully(won){
   state.bullies.push({id:state.nextBullyId++, period:state.period, minute:curMinute(), won:won});
   save(); renderBullies();
+  showToast('Bully '+(won?'gewonnen':'verloren')+' erfasst · Min '+curMinute()+' · '+bullyCounts().w+' : '+bullyCounts().l);
 }
-function undoBully(){if(!state.bullies.length)return; state.bullies.pop(); save(); renderBullies();}
+function undoBully(){
+  if(!state.bullies.length){showToast('Kein Bully zum Zurücknehmen'); return;}
+  var last=state.bullies.pop(); save(); renderBullies();
+  showToast('Letzter Bully ('+(last.won?'gewonnen':'verloren')+') zurückgenommen · '+bullyCounts().w+' : '+bullyCounts().l);
+}
+// Bullys des aktuellen Drittels: gewonnen / verloren
+function bullyCounts(){
+  var cur=state.bullies.filter(function(b){return b.period===state.period;}), w=cur.filter(function(b){return b.won;}).length;
+  return {w:w, l:cur.length-w, n:cur.length};
+}
 function renderBullies(){
   var by={};
   state.bullies.forEach(function(b){
@@ -792,6 +802,9 @@ function renderBullies(){
   if(bl){
     var cur=state.bullies.filter(function(b){return b.period===state.period;}), bw=cur.filter(function(b){return b.won;}).length;
     bl.textContent='Bullys '+state.period+': '+bw+' gewonnen · '+(cur.length-bw)+' verloren'+(cur.length?' ('+Math.round(bw/cur.length*100)+'%)':'');
+    var bwb=document.getElementById('bully-won-btn'), blb=document.getElementById('bully-lost-btn');
+    if(bwb) bwb.textContent='Bully gewonnen · '+bw;
+    if(blb) blb.textContent='Bully verloren · '+(cur.length-bw);
   }
 }
 
