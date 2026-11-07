@@ -142,6 +142,18 @@
     body.phase-play #sec-shot > .row{margin-bottom:6px !important;}
     body.phase-play .col-left{top:62px;}
   }
+  .fm-field{position:relative; background:var(--field); border-radius:12px; margin:6px 0 4px; border:2px solid rgba(255,255,255,0.5);}
+  .fm-goal{position:absolute; border:2px solid #fff; border-radius:3px; opacity:0.85; pointer-events:none;}
+  .fm-slot{position:absolute; width:28%; transform:translate(-50%,-50%); min-height:46px; padding:4px 2px; text-align:center; border-radius:10px;
+    background:rgba(255,255,255,0.14); border:1.5px dashed rgba(255,255,255,0.6); color:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; font-size:13px;}
+  .fm-slot.filled{background:#fff; color:#14181b; border:1.5px solid #fff; font-weight:600;}
+  .fm-slot.selected{outline:3px solid #f2b84b;}
+  .fm-num{font-size:10px; opacity:0.7;}
+  #fm-modal .fm-slot{font-size:17px; min-height:64px; cursor:default;}
+  #fm-modal .fm-field{height:360px !important;}
+  .fm-next{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:6px; color:#fff; font-size:12px;}
+  .fm-next button{min-height:34px; padding:4px 10px; font-size:12px; background:rgba(255,255,255,0.14); color:#fff; border-color:rgba(255,255,255,0.4);}
+  .fm-next button.active{background:#fff; color:#14181b; border-color:#fff;}
 </style>
 </head>
 <body>
@@ -286,6 +298,12 @@
         <button type="button" id="en-btn" onclick="toggleEmptyNet()" style="flex:1;">Torwart raus (Empty Net)</button>
         <button type="button" onclick="undoLastShot()" style="flex:1;">Letzten Schuss löschen</button>
       </div>
+      <div class="row" style="margin-top:8px;">
+        <button type="button" onclick="showFormation('PP')" style="flex:1;">Überzahl</button>
+        <button type="button" onclick="showFormation('U1')" style="flex:1;">Unterzahl 1</button>
+        <button type="button" onclick="showFormation('U2')" style="flex:1;">Unterzahl 2</button>
+      </div>
+      <p class="muted" style="margin:4px 0 0;">Formationen zum Ansagen</p>
       <p class="muted" id="bully-live" style="margin:8px 0 0;"></p>
     </section>
 
@@ -359,13 +377,36 @@
   </div>
 </section>
 
+<div id="fm-modal" onclick="if(event.target===this) hideFormation()" style="display:none; position:fixed; inset:0; z-index:20; background:rgba(10,12,14,0.94); overflow:auto; padding:12px;">
+  <div style="max-width:720px; margin:0 auto;">
+    <div class="row" style="justify-content:space-between; margin-bottom:8px; flex-wrap:nowrap;">
+      <h2 id="fm-title" style="margin:0; font-size:20px; color:var(--text); text-transform:none; letter-spacing:0;"></h2>
+      <button type="button" onclick="hideFormation()">Schließen ✕</button>
+    </div>
+    <div id="fm-body"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
 var POS_KEYS=['OL','C','OR','DL','DR'];
 var POS_LABELS={OL:'Offense links', C:'Center', OR:'Offense rechts', DL:'Defense links', DR:'Defense rechts', G:'Goalie'};
 function emptyLine(){return {OL:null,C:null,OR:null,DL:null,DR:null};}
-function emptyLineup(){return {goalie:null, extra:null, lines:[emptyLine(),emptyLine(),emptyLine()]};}
+// Sonderformationen zum Ansagen: Überzahl (5 Feldspieler), Unterzahl 1 und 2 (je 4); Torwart ist immer dabei
+var FM={PP:{title:'Überzahl', n:5, kind:'pp'}, U1:{title:'Unterzahl 1', n:4, kind:'uz'}, U2:{title:'Unterzahl 2', n:4, kind:'uz'}};
+// Lage der Positionen in Prozent (nach den Skizzen: Überzahl mit Tor oben, Unterzahl mit Tor unten)
+var FM_POS={pp:{1:[16,36],2:[16,88],3:[50,62],4:[84,63],5:[52,90]}, uz:{1:[63,55],2:[37,56],3:[50,38],4:[56,20]}};
+function newFm(){return {PP:{s:{},next:'L1'}, U1:{s:{},next:'L1'}, U2:{s:{},next:'L1'}};}
+function isFm(line){return line==='PP'||line==='U1'||line==='U2';}
+function emptyLineup(){return {goalie:null, extra:null, lines:[emptyLine(),emptyLine(),emptyLine()], fm:newFm()};}
+function ensureFm(){
+  if(!state.lineup.fm) state.lineup.fm=newFm();
+  Object.keys(FM).forEach(function(k){
+    if(!state.lineup.fm[k]) state.lineup.fm[k]={s:{},next:'L1'};
+    if(!state.lineup.fm[k].s) state.lineup.fm[k].s={};
+  });
+}
 
 var state={
   teamUs:'Jena', teamOpp:'', period:'1. Drittel', currentTeam:'Wir',
@@ -554,6 +595,11 @@ function prepSummaryHtml(){
     '<tr><td>Tor</td><td>'+nm(ln.goalie)+'</td></tr>';
   ln.lines.forEach(function(l,i){
     h+='<tr><td>'+(i+1)+'. Reihe</td><td>Sturm: '+[l.OL,l.C,l.OR].map(nm).join(' · ')+'<br>Abwehr: '+[l.DL,l.DR].map(nm).join(' · ')+'</td></tr>';
+  });
+  ensureFm();
+  Object.keys(FM).forEach(function(k){
+    var names=[]; for(var i=1;i<=FM[k].n;i++){var pid=state.lineup.fm[k].s[i]; names.push(pid!=null?nm(pid):'–');}
+    h+='<tr><td>'+FM[k].title+'</td><td>'+names.join(' · ')+'<br><span class="muted">Danach: '+(nextLabel(state.lineup.fm[k].next)||'–')+'</span></td></tr>';
   });
   h+='</table>';
   if(empty) h+='<p class="muted" style="margin:8px 0 0;">'+empty+' von 15 Plätzen sind leer. Das ist in Ordnung, wenn weniger Reihen spielen.</p>';
@@ -785,6 +831,50 @@ function updateSmPolling(){
   if(on&&!smPollTimer) smPollTimer=setInterval(function(){importSmSpecials(true);},60000);
   if(!on&&smPollTimer){clearInterval(smPollTimer); smPollTimer=null;}
 }
+/* ---------- Sonderformationen: Überzahl, Unterzahl 1/2 (zum Ansagen) ---------- */
+function nextLabel(val){return {L1:'1. Reihe',L2:'2. Reihe',L3:'3. Reihe',PP:'Überzahl',U1:'Unterzahl 1',U2:'Unterzahl 2'}[val]||'';}
+function fmFieldHtml(key,modal){
+  ensureFm();
+  var f=FM[key], pos=FM_POS[f.kind];
+  var html='<div class="fm-field" style="height:'+(f.kind==='pp'?250:300)+'px;">'+
+    (f.kind==='pp'?'<div class="fm-goal" style="top:3%;left:38%;width:24%;height:15%;"></div>':'<div class="fm-goal" style="top:80%;left:40%;width:20%;height:13%;"></div>');
+  for(var i=1;i<=f.n;i++){
+    var pid=state.lineup.fm[key].s[i], p=pid!=null?playerById(pid):null;
+    var sel=!modal&&selectedSlot&&selectedSlot.line===key&&String(selectedSlot.pos)===String(i);
+    html+='<div class="fm-slot'+(p?' filled':'')+(sel?' selected':'')+'" style="left:'+pos[i][0]+'%; top:'+pos[i][1]+'%;'+(f.kind==='uz'?' width:24%;':'')+'"'+(modal?'':' onclick="slotClick(\''+key+'\','+i+')"')+'>'+
+      '<span class="fm-num">'+i+'</span><span>'+(p?esc((p.nr?p.nr+' ':'')+shownName(p)):'+')+'</span></div>';
+  }
+  return html+'</div>';
+}
+function fmNextHtml(key){
+  var cur=state.lineup.fm[key].next||'';
+  var opts=[['L1','1. Reihe'],['L2','2. Reihe'],['L3','3. Reihe'],['PP','Überzahl'],['U1','Unterzahl 1'],['U2','Unterzahl 2']].filter(function(o){return o[0]!==key;});
+  return '<div class="fm-next"><span>Danach:</span>'+opts.map(function(o){
+    return '<button type="button" class="'+(cur===o[0]?'active':'')+'" onclick="setFmNext(\''+key+'\',\''+o[0]+'\')">'+o[1]+'</button>';
+  }).join('')+'</div>';
+}
+function setFmNext(key,val){ensureFm(); state.lineup.fm[key].next=val; save(); renderLineup();}
+function lineNamesHtml(i){
+  var l=state.lineup.lines[i];
+  function nm(id){var p=playerById(id); return p?esc(shownName(p)):'–';}
+  return 'Sturm: '+[l.OL,l.C,l.OR].map(nm).join(' · ')+'<br>Abwehr: '+[l.DL,l.DR].map(nm).join(' · ');
+}
+// Vollbild-Ansicht zum Ansagen der Formation im Spiel
+function showFormation(key){
+  ensureFm();
+  var f=FM[key], nx=state.lineup.fm[key].next||'', g=playerById(state.lineup.goalie);
+  var body=fmFieldHtml(key,true)+'<p style="color:#fff; margin:8px 0 0;"><b>Torwart:</b> '+(g?esc(playerLabel(g)):'–')+'</p>';
+  if(nx){
+    body+='<div style="margin-top:10px; padding:10px 12px; background:var(--panel); border-radius:10px; color:var(--text);"><b>Danach: '+nextLabel(nx)+'</b>';
+    if(nx.charAt(0)==='L') body+='<br><span style="font-size:15px; color:var(--text-secondary);">'+lineNamesHtml(parseInt(nx.charAt(1),10)-1)+'</span>';
+    else body+=' <button type="button" style="margin-left:8px;" onclick="showFormation(\''+nx+'\')">Anzeigen ›</button>';
+    body+='</div>';
+  } else body+='<p class="muted" style="margin-top:8px;">Kein "Danach" festgelegt.</p>';
+  document.getElementById('fm-title').textContent=f.title;
+  document.getElementById('fm-body').innerHTML=body;
+  document.getElementById('fm-modal').style.display='block';
+}
+function hideFormation(){document.getElementById('fm-modal').style.display='none';}
 function toggleEmptyNet(){
   if(!isLive()){showToast('Nur im laufenden Drittel'); return;}
   var m=curMinute(), g=playerById(state.lineup.goalie);
@@ -1120,6 +1210,7 @@ function togglePresent(id){
 function removeFromLineup(id){
   if(state.lineup.goalie===id) state.lineup.goalie=null;
   if(state.lineup.extra===id) state.lineup.extra=null;
+  ensureFm(); Object.keys(FM).forEach(function(k){Object.keys(state.lineup.fm[k].s).forEach(function(i){if(state.lineup.fm[k].s[i]===id) delete state.lineup.fm[k].s[i];});});
   state.lineup.lines.forEach(function(line){POS_KEYS.forEach(function(k){if(line[k]===id)line[k]=null;});});
 }
 function findSlotOf(id){
@@ -1136,6 +1227,11 @@ function assignedIds(){
   return ids;
 }
 function availableForSlot(slot){
+  if(slot&&isFm(slot.line)){
+    // Formationen: alle anwesenden Feldspieler, auch wenn sie schon in einer Reihe stehen
+    ensureFm(); var inFm=Object.keys(state.lineup.fm[slot.line].s).map(function(k){return state.lineup.fm[slot.line].s[k];});
+    return sortedRoster().filter(function(p){return p.present&&!p.isGoalie&&inFm.indexOf(p.id)===-1;});
+  }
   var used=assignedIds();
   var avail=sortedRoster().filter(function(p){return p.present&&used.indexOf(p.id)===-1;});
   if(!slot) return avail;
@@ -1147,9 +1243,9 @@ function availableForSlot(slot){
   }
   return avail.slice().sort(function(a,b){return score(a)-score(b);});
 }
-function getSlotValue(slot){return slot.line==='G'?state.lineup.goalie:(slot.line==='X'?state.lineup.extra:state.lineup.lines[slot.line][slot.pos]);}
-function setSlotValue(slot,val){if(slot.line==='G')state.lineup.goalie=val; else if(slot.line==='X')state.lineup.extra=val; else state.lineup.lines[slot.line][slot.pos]=val;}
-function slotLabel(slot){return slot.line==='G'?'Goalie':(slot.line==='X'?'6. Feldspieler (Empty Net)':(slot.line+1)+'. Reihe – '+POS_LABELS[slot.pos]);}
+function getSlotValue(slot){if(isFm(slot.line)){ensureFm(); var fv=state.lineup.fm[slot.line].s[slot.pos]; return fv==null?null:fv;} return slot.line==='G'?state.lineup.goalie:(slot.line==='X'?state.lineup.extra:state.lineup.lines[slot.line][slot.pos]);}
+function setSlotValue(slot,val){if(isFm(slot.line)){ensureFm(); if(val==null) delete state.lineup.fm[slot.line].s[slot.pos]; else state.lineup.fm[slot.line].s[slot.pos]=val; return;} if(slot.line==='G')state.lineup.goalie=val; else if(slot.line==='X')state.lineup.extra=val; else state.lineup.lines[slot.line][slot.pos]=val;}
+function slotLabel(slot){if(isFm(slot.line)) return FM[slot.line].title+' – Position '+slot.pos; return slot.line==='G'?'Goalie':(slot.line==='X'?'6. Feldspieler (Empty Net)':(slot.line+1)+'. Reihe – '+POS_LABELS[slot.pos]);}
 
 function slotClick(lineIdx,pos){selectedSlot={line:lineIdx,pos:pos}; renderLineup(); renderSlotPanel();}
 function renderSlotPanel(){
@@ -1166,7 +1262,7 @@ function renderSlotPanel(){
     extra='<button type="button" onclick="clearSlot()" style="flex:1;">Nur raus</button>';
   }
   panel.innerHTML=head+
-    '<div class="row" style="margin-bottom:8px;"><label class="muted" style="white-space:nowrap;">Minute</label><input type="number" id="slot-minute" min="0" step="1" value="'+curMinute()+'" style="max-width:90px;"></div>'+
+    (isFm(selectedSlot.line)?'':'<div class="row" style="margin-bottom:8px;"><label class="muted" style="white-space:nowrap;">Minute</label><input type="number" id="slot-minute" min="0" step="1" value="'+curMinute()+'" style="max-width:90px;"></div>')+
     '<div class="chip-grid">'+chips+'</div>'+
     '<div class="row" style="margin-top:10px;">'+extra+'<button type="button" onclick="closeSlotPanel()" style="flex:1;">Abbrechen</button></div>';
   panel.classList.add('show');
@@ -1178,6 +1274,7 @@ function pickForSlot(pid){
   var minute=slotMinute();
   var current=getSlotValue(selectedSlot);
   var pIn=playerById(pid); if(!pIn)return;
+  if(isFm(selectedSlot.line)){var fmLabel=slotLabel(selectedSlot); setSlotValue(selectedSlot,pid); save(); closeSlotPanel(); showToast(playerLabel(pIn)+' – '+fmLabel); return;} // Formation: nur Ansage, keine Spielzeit
   if(current!==null){
     var pOut=playerById(current);
     if(pOut&&pOut.onField){pOut.events.push({period:state.period, minute:minute, action:'aus'}); pOut.onField=false;}
@@ -1189,6 +1286,7 @@ function pickForSlot(pid){
   showToast(isLive()?playerLabel(pIn)+' rein (Min '+minute+')':playerLabel(pIn)+' eingesetzt');
 }
 function clearSlot(){
+  if(selectedSlot&&isFm(selectedSlot.line)){setSlotValue(selectedSlot,null); save(); closeSlotPanel(); return;}
   var minute=slotMinute();
   var outId=getSlotValue(selectedSlot);
   var pOut=playerById(outId);
@@ -1275,6 +1373,10 @@ function renderLineup(){
       '<div class="slot-grid-off">'+slotHtml(i,'OL')+slotHtml(i,'C')+slotHtml(i,'OR')+'</div>'+
       '<div class="slot-grid-def">'+slotHtml(i,'DL')+slotHtml(i,'DR')+'</div></div>';
   }
+  ensureFm();
+  Object.keys(FM).forEach(function(k){
+    html+='<div class="line-card"><p class="line-title">'+FM[k].title+' ('+FM[k].n+' Feldspieler + Torwart)</p>'+fmFieldHtml(k,false)+fmNextHtml(k)+'</div>';
+  });
   el.innerHTML=html;
   var bench=availableForSlot(null);
   var bi=document.getElementById('bench-info');
