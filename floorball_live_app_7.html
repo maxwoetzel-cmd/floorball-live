@@ -68,6 +68,8 @@
   .line-card{background:var(--field); border-radius:12px; padding:12px 10px; margin-top:10px;}
   .line-title{color:#fff; font-size:12px; font-weight:600; margin:0 0 8px; opacity:0.85; text-transform:uppercase; letter-spacing:0.04em;}
   .slot-grid-off{display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-bottom:10px;}
+  .slot-grid-off{align-items:start;}
+  .slot-grid-off > :nth-child(2){margin-top:22px;} /* Center ein Stueck hinter den Offense-Spielern */
   .slot-grid-def{display:grid; grid-template-columns:1fr 1fr; gap:8px; padding:0 12%;}
   .slot{background:rgba(255,255,255,0.14); border:1.5px dashed rgba(255,255,255,0.55); color:#fff;
     border-radius:10px; padding:6px 4px; min-height:52px; cursor:pointer; text-align:center;
@@ -435,7 +437,7 @@ var FM={
   ALT:{title:'Alternative Aufstellung', n:5, kind:'line', names:{1:'Offense links', 2:'Center', 3:'Offense rechts', 4:'Defense links', 5:'Defense rechts'}}
 };
 // Lage der Positionen in Prozent (nach den Skizzen: Überzahl mit Tor oben, Unterzahl mit Tor unten)
-var FM_POS={pp:{1:[16,36],2:[16,88],3:[50,62],4:[84,63],5:[52,90]}, uz:{1:[63,67],2:[37,67],3:[50,42],4:[58,15]}, line:{1:[18,24],2:[50,24],3:[82,24],4:[32,70],5:[68,70]}};
+var FM_POS={pp:{1:[16,36],2:[16,88],3:[50,62],4:[84,63],5:[52,90]}, uz:{1:[63,67],2:[37,67],3:[50,42],4:[58,15]}, line:{1:[18,20],2:[50,38],3:[82,20],4:[32,74],5:[68,74]}};
 function newFm(){return {PP:{s:{},next:'L1'}, U1:{s:{},next:'L1'}, U2:{s:{},next:'L1'}, ALT:{s:{},next:''}};}
 function isFm(line){return line==='PP'||line==='U1'||line==='U2'||line==='ALT';}
 function emptyLineup(){return {goalie:null, extra:null, lines:[emptyLine(),emptyLine(),emptyLine()], fm:newFm()};}
