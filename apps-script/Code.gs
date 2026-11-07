@@ -115,6 +115,29 @@ function getGameLineup(gameId) {
 }
 
 /**
+ * Tore und Strafen (mit Zeit) eines Spiels von USV Jena aus dem Saisonmanager, für die automatische
+ * Berechnung von Über-/Unterzahl. Leer, solange dort noch nichts eingetragen ist.
+ */
+function getGameEvents(gameId) {
+  gameId = parseInt(gameId, 10);
+  if (!gameId) throw new Error('Spiel-ID fehlt.');
+  var d = apiGet_('games/' + gameId);
+  var side = d.home_team_id === CONFIG.TEAM_ID ? 'home' : (d.guest_team_id === CONFIG.TEAM_ID ? 'guest' : '');
+  if (!side) throw new Error('Das ist kein Spiel von USV Jena.');
+  var events = (d.events || [])
+    .filter(function (e) { return e.event_type === 'goal' || e.event_type === 'penalty'; })
+    .map(function (e) {
+      return {
+        event_id: e.event_id, event_type: e.event_type, event_team: e.event_team,
+        period: e.period, time: e.time,
+        penalty_type: e.penalty_type || '', penalty_type_string: e.penalty_type_string || '',
+        goal_type: e.goal_type || ''
+      };
+    });
+  return { side: side, status: d.game_status, events: events };
+}
+
+/**
  * Schreibt eine Textdatei in den Ordner "Exporte".
  * overwrite=true: gleichnamige Datei wird aktualisiert (z. B. für den laufenden Spielstand).
  */
@@ -218,22 +241,18 @@ function testPfad() {
  */
 function testKader() {
   try {
-    var data = getSchedule();
-    var games = Array.isArray(data) ? data : ((data && data.games) || []);
-    var up = games.filter(function (g) {
-      return !g.ended && (g.home_team_id === CONFIG.TEAM_ID || g.guest_team_id === CONFIG.TEAM_ID);
-    }).sort(function (a, b) { return (a.date + ' ' + a.time) < (b.date + ' ' + b.time) ? -1 : 1; });
-    if (!up.length) { Logger.log('Kein kommendes Spiel gefunden.'); return; }
-    var g = up[0], d = apiGet_('games/' + g.game_id);
-    var side = g.home_team_id === CONFIG.TEAM_ID ? 'home' : 'guest';
-    var mine = (d.players && d.players[side]) || [];
-    var keys = {};
-    mine.forEach(function (p) { Object.keys(p).forEach(function (k) { keys[k] = true; }); });
-    Logger.log('Spiel ' + g.game_id + ' ' + g.date + ' ' + g.time + ', Status ' + d.game_status + ' / ' + d.ingame_status + ', unsere Seite: ' + side);
-    Logger.log('Spieler in der Aufstellung (unsere Seite): ' + mine.length);
-    Logger.log('Spielerfelder: ' + Object.keys(keys).join(', '));
-    Logger.log('starting_players: ' + JSON.stringify(d.starting_players).slice(0, 400));
-    Logger.log('Kapitän-Hinweise: ' + JSON.stringify(mine.filter(function (p) { return p.captain || p.is_captain; }).length));
+    // Beendetes Spiel (Beispiel-ID 57970): Welche Ereignisse (Tore, Strafen ...) liefert der Saisonmanager?
+    var d = apiGet_('games/57970'), ev = d.events || [];
+    Logger.log('Ereignisse gesamt: ' + ev.length);
+    if (ev.length) Logger.log('Felder: ' + Object.keys(ev[0]).join(', '));
+    var types = {};
+    ev.forEach(function (e) {
+      var k = e.event_type || e.type || e.kind || '?';
+      (types[k] = types[k] || []).push(e);
+    });
+    Object.keys(types).forEach(function (k) {
+      Logger.log('Typ ' + k + ': ' + types[k].length + ' | Beispiel: ' + JSON.stringify(types[k][0]).slice(0, 400));
+    });
   } catch (e) { Logger.log('FEHLER ' + e.message); }
 }
 
