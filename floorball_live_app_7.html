@@ -97,7 +97,7 @@
   #topbar{position:sticky; top:0; z-index:6; background:var(--bg); border-bottom:1px solid var(--border);
     padding:8px 0; margin-bottom:10px; display:flex; flex-wrap:wrap; gap:8px 16px; align-items:center;}
   .tb-row{display:flex; align-items:center; gap:8px;}
-  .tb-score{font-size:20px; gap:12px;}
+  .tb-score{font-size:20px; gap:12px; white-space:nowrap;}
   .tb-score b{font-size:40px; line-height:1; font-variant-numeric:tabular-nums;}
   .tb-team{color:var(--text-secondary); font-size:13px; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .tb-period{font-size:13px; color:var(--wir); font-weight:700;}
@@ -139,7 +139,7 @@
     body.phase-play #sec-shot > .row{margin-bottom:6px !important;}
     body.phase-play .col-left{top:62px;}
   }
-  .fm-field{position:relative; background:var(--field); border-radius:12px; margin:6px auto 4px; max-width:480px; overflow:hidden;}
+  .fm-field{position:relative; background:var(--field); border-radius:12px; margin:6px auto 4px; max-width:420px; overflow:hidden;}
   .fm-bg{position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none;}
   .lf-field .slot{position:absolute; width:27%; transform:translate(-50%,-50%); min-height:50px;}
   .fm-goal{position:absolute; border:2px solid #fff; border-radius:3px; opacity:0.85; pointer-events:none;}
@@ -906,7 +906,7 @@ function nextLabel(val){return {L1:'1. Reihe',L2:'2. Reihe',L3:'3. Reihe',ALT:'A
 function fmFieldHtml(key,modal,altMode){
   ensureFm();
   var f=FM[key], pos=FM_POS[f.kind];
-  var html='<div class="fm-field" style="height:'+(f.kind==='pp'?250:(f.kind==='uz'?300:230))+'px;">'+fieldBgSvg(f.kind==='uz'?'defense':'offense');
+  var html='<div class="fm-field" style="aspect-ratio:'+(f.kind==='pp'?'100/82':(f.kind==='uz'?'100/98':'100/66'))+';">'+fieldBgSvg(f.kind==='uz'?'defense':'offense');
   for(var i=1;i<=f.n;i++){
     var pid=state.lineup.fm[key].s[i], p=pid!=null?playerById(pid):null;
     var sel=altMode?(altSel===i):(!modal&&selectedSlot&&selectedSlot.line===key&&String(selectedSlot.pos)===String(i));
@@ -1536,7 +1536,7 @@ function renderLineup(){
   if(state.emptyNet) html+='<div class="line-card"><p class="line-title clickable" onclick="togglePool(\'X\')">Empty Net – 6. Feldspieler '+poolMark('X')+'</p><div class="goalie-wrap">'+slotHtml('X','X')+'</div>'+poolHtml('X')+'</div>';
   for(var i=0;i<3;i++){
     html+='<div class="line-card"><p class="line-title clickable" onclick="togglePool(\'L'+i+'\')">'+(i+1)+'. Reihe '+poolMark('L'+i)+'</p>'+
-      '<div class="fm-field lf-field" style="height:270px;">'+fieldBgSvg('offense')+
+      '<div class="fm-field lf-field" style="aspect-ratio:100/88;">'+fieldBgSvg('offense')+
       ['OL','C','OR','DL','DR'].map(function(k){return slotHtml(i,k,LINE_POS[k]);}).join('')+'</div>'+poolHtml('L'+i)+'</div>';
   }
   ensureFm();
