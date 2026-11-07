@@ -71,7 +71,7 @@ Verantwortlich: Max Woetzel (Head-Coach Herren).
   Offen: Vereinslogo (blau/weiß) als Inline-SVG/Base64, Schussmarker-Form nach Ergebnis, Stat-Tabellen (Zebra/Balken).
 - Spielfelder (08.11.2026): Feldfarbe = Vereinsblau `#002d5a` (CD-Richtlinie, RGB 0/45/90; Magenta bewusst nicht verwendet).
   Überzahl, Unterzahl 1/2 und Alternative Aufstellung zeigen ein Feld mit Linien (`fieldBgSvg`, Maßstab 20 Einheiten je Meter:
-  Tor mit Netz an der Bande plus flaches Torraum-Rechteck nach Vorlage des Vereins; `LF_DIM` = Seitenverhältnis). Positionen in `FM_POS` liegen so, dass kein
+  Torraum (Rechteck) mit Tor (Netz) oben und Schutzraum darunter, Proportionen nach Vorlage des Vereins; `LF_DIM` = Seitenverhältnis). Positionen in `FM_POS` liegen so, dass kein
   Slot auf einer Linie oder einem anderen Slot liegt. Überzahl/Alternative: Tor oben, Unterzahl: Tor unten.
   Reihen 1–3 bleiben bewusst das Raster ohne Feld (Offense links/rechts vor dem Center, `.slot-grid-off`).
 
