@@ -163,6 +163,17 @@
   .btn-fm{min-height:60px; font-size:16px; font-weight:700;}
   .btn-fm-pp{background:#f2b84b !important; border-color:#f2b84b !important; color:#241a05 !important;}
   .btn-fm-uz{background:#7b61d9 !important; border-color:#7b61d9 !important; color:#ffffff !important;}
+  .clickable{cursor:pointer;}
+  .pool{background:rgba(0,0,0,0.22); border-radius:10px; padding:8px 10px; margin-top:10px;}
+  .pool-title{font-size:12px; color:#fff; opacity:0.85;}
+  .pool .pick-chip{background:#fff; color:#14181b; border-color:#fff; font-weight:600;}
+  #slot-menu-bd{display:none; position:fixed; inset:0; z-index:29; background:rgba(0,0,0,0.25);}
+  #slot-menu{display:none; position:fixed; z-index:30; background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:6px; overflow-y:auto; box-shadow:0 8px 24px rgba(0,0,0,0.5);}
+  .sm-title{font-size:12px; color:var(--text-secondary); padding:6px 8px;}
+  .sm-cur{font-size:13px; padding:2px 8px 6px;}
+  .sm-item{display:block; width:100%; text-align:left; min-height:44px; margin:2px 0; font-size:15px;}
+  .sm-clear{color:var(--danger);}
+  .sm-empty{padding:8px; font-size:13px; color:var(--text-muted);}
 </style>
 </head>
 <body>
@@ -320,7 +331,7 @@
       <h2>Aufstellung <span id="lineup-period-badge" style="color:var(--wir); font-weight:700;"></span>
         <button type="button" class="toggle-btn" onclick="toggleSection('sec-lineup')">Wechsel ▾</button></h2>
       <div class="sec-body">
-        <p class="muted" style="margin:0 0 4px;">Position antippen und Spieler wählen. Besetzten Spieler antippen für einen Wechsel.</p>
+        <p class="muted" style="margin:0 0 4px;">Namen einer Reihe antippen: alle möglichen Spieler erscheinen darunter (antippen = auf freien Platz). Position antippen: Auswahlliste für diesen Platz.</p>
         <div id="lineup"></div>
         <div class="slot-panel" id="slot-panel"></div>
         <div id="bench-info" style="margin-top:10px;"></div>
@@ -407,6 +418,9 @@
     </div>
   </div>
 </div>
+
+<div id="slot-menu-bd" onclick="closeSlotMenu()"></div>
+<div id="slot-menu"></div>
 
 <div class="toast" id="toast"></div>
 
@@ -870,7 +884,7 @@ function fmCardHead(key){
     h+='<input type="text" id="fm-label-input" value="'+esc(state.lineup.fm[key].label||'')+'" placeholder="'+esc(FM[key].title)+'" maxlength="30" onkeydown="if(event.key===\'Enter\') saveFmLabel(\''+key+'\')" style="min-height:36px; width:55%;"> '+
        '<button type="button" class="fm-pencil" onclick="saveFmLabel(\''+key+'\')">OK</button> '+
        '<button type="button" class="fm-pencil" onclick="resetFmLabel(\''+key+'\')" title="Standardname">↺</button>';
-  } else h+=esc(fmName(key))+' <button type="button" class="fm-pencil" onclick="editFmLabel(\''+key+'\')" aria-label="Bezeichnung ändern">✎</button>';
+  } else h+='<span class="clickable" onclick="togglePool(\''+key+'\')">'+esc(fmName(key))+' '+poolMark(key)+'</span> <button type="button" class="fm-pencil" onclick="editFmLabel(\''+key+'\')" aria-label="Bezeichnung ändern">✎</button>';
   return h+' <span class="fm-sub">('+FM[key].n+' Feldspieler + Torwart)</span></p>';
 }
 function editFmLabel(key){fmEditing=key; renderLineup(); var i=document.getElementById('fm-label-input'); if(i){i.focus(); i.select();}}
@@ -899,7 +913,7 @@ function fmFieldHtml(key,modal,altMode){
     var pid=state.lineup.fm[key].s[i], p=pid!=null?playerById(pid):null;
     var sel=altMode?(altSel===i):(!modal&&selectedSlot&&selectedSlot.line===key&&String(selectedSlot.pos)===String(i));
     var click=modal?'':(altMode?' onclick="altSlot('+i+')"':' onclick="slotClick(\''+key+'\','+i+')"');
-    html+='<div class="fm-slot'+(p?' filled':'')+(sel?' selected':'')+'" style="left:'+pos[i][0]+'%; top:'+pos[i][1]+'%;'+(f.kind==='uz'?' width:24%;':(f.kind==='line'?' width:27%;':''))+'"'+click+'>'+
+    html+='<div class="fm-slot'+(p?' filled':'')+(sel?' selected':'')+'" style="left:'+pos[i][0]+'%; top:'+pos[i][1]+'%;'+(f.kind==='uz'?' width:24%;':(f.kind==='line'?' width:27%;':''))+'" data-slot="'+key+':'+i+'"'+click+'>'+
       '<span class="fm-num">'+esc(f.names[i]||i)+'</span><span>'+(p?esc((p.nr?p.nr+' ':'')+shownName(p)):'+')+'</span></div>';
   }
   return html+'</div>';
@@ -970,15 +984,67 @@ function showFormation(key){
   document.getElementById('fm-modal').style.display='block';
 }
 function hideFormation(){document.getElementById('fm-modal').style.display='none';}
+/* ---------- Spielerauswahl: Liste am Platz, Spielerbereich unter der Formation ---------- */
+var poolOpen='', menuSlot=null;
+function poolMark(key){return poolOpen===key?'▴':'▾';}
+function togglePool(key){poolOpen=poolOpen===key?'':key; renderLineup();}
+function poolSlotFor(key){
+  if(key==='G'||key==='X') return {line:key,pos:key};
+  if(key.charAt(0)==='L') return {line:parseInt(key.charAt(1),10),pos:'C'};
+  return {line:key,pos:1};
+}
+function poolHtml(key){
+  if(poolOpen!==key) return '';
+  var avail=availableForSlot(poolSlotFor(key)), what=key==='G'?'Torhüter':'Feldspieler';
+  return '<div class="pool"><div class="pool-title">'+what+' nach Trikotnummer – antippen setzt auf einen freien Platz</div><div class="chip-grid" style="margin-top:4px;">'+
+    (avail.length?avail.map(function(p){
+      return '<span class="pick-chip" draggable="true" ondragstart="chipDragStart(event,'+p.id+')" onclick="poolPick(\''+key+'\','+p.id+')">'+esc((p.nr?p.nr+' ':'')+shownName(p)+(p.isCaptain?' (K)':''))+'</span>';
+    }).join(' '):'<span style="color:#fff; opacity:0.85; font-size:13px;">Keine weiteren anwesenden '+what+' verfügbar.</span>')+'</div></div>';
+}
+function poolPick(key,pid){
+  var p=playerById(pid); if(!p) return;
+  var slot=null;
+  if(key==='G'||key==='X') slot=poolSlotFor(key);
+  else if(key.charAt(0)==='L'){
+    var li=parseInt(key.charAt(1),10), L=state.lineup.lines[li];
+    // Abwehrspieler zuerst auf Abwehrplätze, Center zuerst in die Mitte
+    var order=p.pos==='D'?['DL','DR','OL','C','OR']:(p.pos==='C'?['C','OL','OR','DL','DR']:['OL','OR','C','DL','DR']);
+    var free=order.filter(function(k){return L[k]==null;})[0];
+    if(free) slot={line:li,pos:free};
+  } else {
+    ensureFm();
+    for(var i=1;i<=FM[key].n;i++){if(state.lineup.fm[key].s[i]==null){slot={line:key,pos:i}; break;}}
+  }
+  if(!slot){showToast('Alle Plätze belegt – Position antippen, um einen Spieler zu ersetzen'); return;}
+  selectedSlot=slot; pickForSlot(pid);
+}
+function openSlotMenu(el,slot){
+  var cur=getSlotValue(slot), pc=cur!=null?playerById(cur):null, avail=availableForSlot(slot);
+  var h='<div class="sm-title">'+esc(slotLabel(slot))+(isLive()&&!isFm(slot.line)?' · Wechsel bei Min '+curMinute():'')+'</div>';
+  if(pc) h+='<div class="sm-cur">Aktuell: <b>'+esc(playerLabel(pc))+'</b></div><button type="button" class="sm-item sm-clear" onclick="menuClear()">Platz leeren</button>';
+  h+=avail.length?avail.map(function(p){
+    return '<button type="button" class="sm-item" onclick="menuPick('+p.id+')">'+esc((p.nr?p.nr+' ':'')+shownName(p)+(p.isCaptain?' (K)':''))+'</button>';
+  }).join(''):'<div class="sm-empty">'+(slot.line==='G'?'Kein weiterer anwesender Torwart verfügbar.':'Keine weiteren anwesenden Feldspieler verfügbar.')+'</div>';
+  var m=document.getElementById('slot-menu'), bd=document.getElementById('slot-menu-bd');
+  menuSlot=slot; m.innerHTML=h; bd.style.display='block'; m.style.display='block';
+  var r=el?el.getBoundingClientRect():{left:innerWidth/2-100,width:200,top:innerHeight/2,bottom:innerHeight/2};
+  var w=Math.min(260,innerWidth-16); m.style.width=w+'px';
+  m.style.left=Math.max(8,Math.min(innerWidth-w-8,r.left+r.width/2-w/2))+'px';
+  var below=innerHeight-r.bottom-10, above=r.top-10;
+  if(below>=Math.min(260,above)){m.style.top=(r.bottom+4)+'px'; m.style.bottom='auto'; m.style.maxHeight=Math.max(140,Math.min(420,below))+'px';}
+  else{m.style.bottom=(innerHeight-r.top+4)+'px'; m.style.top='auto'; m.style.maxHeight=Math.max(140,Math.min(420,above))+'px';}
+}
+function closeSlotMenu(){document.getElementById('slot-menu').style.display='none'; document.getElementById('slot-menu-bd').style.display='none';}
+function menuPick(pid){var sl=menuSlot; closeSlotMenu(); selectedSlot=sl; pickForSlot(pid);}
+function menuClear(){var sl=menuSlot; closeSlotMenu(); selectedSlot=sl; clearSlot();}
 function toggleEmptyNet(){
   if(!isLive()){showToast('Nur im laufenden Drittel'); return;}
   var m=curMinute(), g=playerById(state.lineup.goalie);
   if(!state.emptyNet){
     state.emptyNet=true;
     if(g&&g.onField){g.events.push({period:state.period, minute:m, action:'aus'}); g.onField=false;}
-    selectedSlot={line:'X',pos:'X'};
-    document.getElementById('sec-lineup').classList.add('open');
-    save(); renderAll(); showToast('Torwart raus – 6. Feldspieler wählen (optional)');
+    document.getElementById('sec-lineup').classList.add('open'); poolOpen='X';
+    save(); renderAll(); showToast('Torwart raus – 6. Feldspieler unter "Empty Net" wählen (optional)');
   } else {
     state.emptyNet=false;
     var x=playerById(state.lineup.extra);
@@ -1321,28 +1387,26 @@ function assignedIds(){
   state.lineup.lines.forEach(function(l){POS_KEYS.forEach(function(k){if(l[k]!==null)ids.push(l[k]);});});
   return ids;
 }
+function sortByNr(list){
+  return list.slice().sort(function(a,b){return (nrNum(a)-nrNum(b))||String(a.name||'').localeCompare(String(b.name||''));});
+}
 function availableForSlot(slot){
   if(slot&&isFm(slot.line)){
     // Formationen: alle anwesenden Feldspieler, auch wenn sie schon in einer Reihe stehen
     ensureFm(); var inFm=Object.keys(state.lineup.fm[slot.line].s).map(function(k){return state.lineup.fm[slot.line].s[k];});
-    return sortedRoster().filter(function(p){return p.present&&!p.isGoalie&&inFm.indexOf(p.id)===-1;});
+    return sortByNr(state.roster.filter(function(p){return p.present&&!p.isGoalie&&inFm.indexOf(p.id)===-1;}));
   }
   var used=assignedIds();
-  var avail=sortedRoster().filter(function(p){return p.present&&used.indexOf(p.id)===-1;});
-  if(!slot) return avail;
-  function score(p){
-    if(slot.line==='X') return p.isGoalie?1:0;
-    if(slot.line==='G') return p.isGoalie?0:1;
-    var want = (slot.pos==='DL'||slot.pos==='DR')?'D':(slot.pos==='C'?'C':'O');
-    return p.pos===want?0:1;
-  }
-  return avail.slice().sort(function(a,b){return score(a)-score(b);});
+  var avail=state.roster.filter(function(p){return p.present&&used.indexOf(p.id)===-1;});
+  if(!slot) return sortByNr(avail);
+  var goalieSlot=slot.line==='G';
+  return sortByNr(avail.filter(function(p){return goalieSlot?!!p.isGoalie:!p.isGoalie;}));
 }
 function getSlotValue(slot){if(isFm(slot.line)){ensureFm(); var fv=state.lineup.fm[slot.line].s[slot.pos]; return fv==null?null:fv;} return slot.line==='G'?state.lineup.goalie:(slot.line==='X'?state.lineup.extra:state.lineup.lines[slot.line][slot.pos]);}
 function setSlotValue(slot,val){if(isFm(slot.line)){ensureFm(); if(val==null) delete state.lineup.fm[slot.line].s[slot.pos]; else state.lineup.fm[slot.line].s[slot.pos]=val; return;} if(slot.line==='G')state.lineup.goalie=val; else if(slot.line==='X')state.lineup.extra=val; else state.lineup.lines[slot.line][slot.pos]=val;}
 function slotLabel(slot){if(isFm(slot.line)) return fmName(slot.line)+' – '+(FM[slot.line].names[slot.pos]||('Position '+slot.pos)); return slot.line==='G'?'Goalie':(slot.line==='X'?'6. Feldspieler (Empty Net)':(slot.line+1)+'. Reihe – '+POS_LABELS[slot.pos]);}
 
-function slotClick(lineIdx,pos){selectedSlot={line:lineIdx,pos:pos}; renderLineup(); renderSlotPanel();}
+function slotClick(lineIdx,pos){openSlotMenu(document.querySelector('[data-slot="'+lineIdx+':'+pos+'"]'),{line:lineIdx,pos:pos});}
 function renderSlotPanel(){
   var panel=document.getElementById('slot-panel');
   if(!selectedSlot){panel.classList.remove('show'); panel.innerHTML=''; return;}
@@ -1455,23 +1519,23 @@ function slotHtml(lineIdx,pos){
   var posLabel=lineIdx==='G'?'Goalie':(lineIdx==='X'?'6. Feldspieler':POS_LABELS[pos]);
   var who=p?playerLabel(p):'+';
   var lineArg=(lineIdx==='G'||lineIdx==='X')?"'"+lineIdx+"'":lineIdx;
-  return '<div class="'+cls+'" onclick="slotClick('+lineArg+',\''+pos+'\')" '+
+  return '<div class="'+cls+'" data-slot="'+lineIdx+':'+pos+'" onclick="slotClick('+lineArg+',\''+pos+'\')" '+
     'ondragover="dragOverHandler(event)" ondragleave="dragLeaveHandler(event)" ondrop="slotDrop(event,'+lineArg+',\''+pos+'\')">'+
     '<span class="pos">'+posLabel+'</span><span class="who">'+who+'</span></div>';
 }
 function renderLineup(){
   var el=document.getElementById('lineup');
-  var html='<div class="line-card"><p class="line-title">Tor</p><div class="goalie-wrap">'+slotHtml('G','G')+'</div></div>';
-  if(state.emptyNet) html+='<div class="line-card"><p class="line-title">Empty Net</p><div class="goalie-wrap">'+slotHtml('X','X')+'</div></div>';
+  var html='<div class="line-card"><p class="line-title clickable" onclick="togglePool(\'G\')">Tor '+poolMark('G')+'</p><div class="goalie-wrap">'+slotHtml('G','G')+'</div>'+poolHtml('G')+'</div>';
+  if(state.emptyNet) html+='<div class="line-card"><p class="line-title clickable" onclick="togglePool(\'X\')">Empty Net – 6. Feldspieler '+poolMark('X')+'</p><div class="goalie-wrap">'+slotHtml('X','X')+'</div>'+poolHtml('X')+'</div>';
   for(var i=0;i<3;i++){
-    html+='<div class="line-card"><p class="line-title">'+(i+1)+'. Reihe</p>'+
+    html+='<div class="line-card"><p class="line-title clickable" onclick="togglePool(\'L'+i+'\')">'+(i+1)+'. Reihe '+poolMark('L'+i)+'</p>'+
       '<div class="slot-grid-off">'+slotHtml(i,'OL')+slotHtml(i,'C')+slotHtml(i,'OR')+'</div>'+
-      '<div class="slot-grid-def">'+slotHtml(i,'DL')+slotHtml(i,'DR')+'</div></div>';
+      '<div class="slot-grid-def">'+slotHtml(i,'DL')+slotHtml(i,'DR')+'</div>'+poolHtml('L'+i)+'</div>';
   }
   ensureFm();
   Object.keys(FM).forEach(function(k){
     if(k==='ALT') return; // Alternative Aufstellung wird über den Knopf bei "Danach" eingegeben
-    html+='<div class="line-card">'+fmCardHead(k)+fmFromHtml(k)+fmFieldHtml(k,false)+fmNextHtml(k)+'</div>';
+    html+='<div class="line-card">'+fmCardHead(k)+fmFromHtml(k)+fmFieldHtml(k,false)+poolHtml(k)+fmNextHtml(k)+'</div>';
   });
   el.innerHTML=html;
   updateFmButtons();
