@@ -1106,20 +1106,26 @@ function currentRows(){return state.currentTeam==='Wir'?ZONE_ROWS_OFF:ZONE_ROWS_
 // Nach Vorlage des Vereins: Der Torraum ist das grosse Rechteck (ca. 1,4 : 1). Darin liegen oben das Tor mit Netz und
 // direkt darunter der Schutzraum (kleines Rechteck). Der Ausschnitt ist offen (zur Mitte hin abgeschnitten).
 var LF_DIM={pp:[400,330], uz:[400,340]};
-function fieldBgSvg(kind){
-  var d=LF_DIM[kind], w=d[0], h=d[1], top=(kind!=='uz'), S='stroke="#fff" fill="none"', p=[];
-  var cx=w/2, BW=100, BH=72, GW=26, GH=12, SW=47, SH=20, off=30; // Torraum, Tor, Schutzraum, Abstand Bande-Torraum
-  var by=top?4+off:h-4-off-BH;            // Oberkante Torraum
+// Torraum mit Tor (Netz) und Schutzraum. cx = Mitte, by = Oberkante des Torraums, top = Tor oben (sonst unten), k = Massstab.
+function goalAreaSvg(cx,by,top,k){
+  var S='stroke="#fff" fill="none"', p=[], BW=100*k, BH=72*k, GW=26*k, GH=12*k, SW=47*k, SH=20*k, st=4*k;
   var gy=top?by+2:by+BH-2-GH;             // Oberkante Tor (an der Torlinie, leicht eingerueckt)
   var sy=top?gy+GH:gy-SH;                 // Oberkante Schutzraum (direkt am Tor)
-  p.push(top?'<path d="M4 '+h+'V28Q4 4 28 4H'+(w-28)+'Q'+(w-4)+' 4 '+(w-4)+' 28V'+h+'" '+S+' stroke-width="3"></path>'
-            :'<path d="M4 0V'+(h-28)+'Q4 '+(h-4)+' 28 '+(h-4)+'H'+(w-28)+'Q'+(w-4)+' '+(h-4)+' '+(w-4)+' '+(h-28)+'V0" '+S+' stroke-width="3"></path>');
   p.push('<rect x="'+(cx-BW/2)+'" y="'+by+'" width="'+BW+'" height="'+BH+'" '+S+' stroke-width="2.5"></rect>');
   p.push('<rect x="'+(cx-SW/2)+'" y="'+sy+'" width="'+SW+'" height="'+SH+'" '+S+' stroke-width="2.5"></rect>');
   // Netz: feines Gitter im Tor
-  for(var x=cx-GW/2+4;x<cx+GW/2;x+=4) p.push('<line x1="'+x+'" y1="'+gy+'" x2="'+x+'" y2="'+(gy+GH)+'" stroke="#fff" stroke-opacity="0.65" stroke-width="1"></line>');
-  for(var y=gy+4;y<gy+GH;y+=4) p.push('<line x1="'+(cx-GW/2)+'" y1="'+y+'" x2="'+(cx+GW/2)+'" y2="'+y+'" stroke="#fff" stroke-opacity="0.65" stroke-width="1"></line>');
+  for(var x=cx-GW/2+st;x<cx+GW/2-0.5;x+=st) p.push('<line x1="'+x+'" y1="'+gy+'" x2="'+x+'" y2="'+(gy+GH)+'" stroke="#fff" stroke-opacity="0.65" stroke-width="1"></line>');
+  for(var y=gy+st;y<gy+GH-0.5;y+=st) p.push('<line x1="'+(cx-GW/2)+'" y1="'+y+'" x2="'+(cx+GW/2)+'" y2="'+y+'" stroke="#fff" stroke-opacity="0.65" stroke-width="1"></line>');
   p.push('<rect x="'+(cx-GW/2)+'" y="'+gy+'" width="'+GW+'" height="'+GH+'" '+S+' stroke-width="2.5"></rect>');
+  return p.join('');
+}
+function fieldBgSvg(kind){
+  var d=LF_DIM[kind], w=d[0], h=d[1], top=(kind!=='uz'), S='stroke="#fff" fill="none"', p=[];
+  var off=30, BH=72; // Abstand Bande-Torraum, Torraum-Tiefe
+  var by=top?4+off:h-4-off-BH;            // Oberkante Torraum
+  p.push(top?'<path d="M4 '+h+'V28Q4 4 28 4H'+(w-28)+'Q'+(w-4)+' 4 '+(w-4)+' 28V'+h+'" '+S+' stroke-width="3"></path>'
+            :'<path d="M4 0V'+(h-28)+'Q4 '+(h-4)+' 28 '+(h-4)+'H'+(w-28)+'Q'+(w-4)+' '+(h-4)+' '+(w-4)+' '+(h-28)+'V0" '+S+' stroke-width="3"></path>');
+  p.push(goalAreaSvg(w/2,by,top,1));
   return '<svg class="fm-bg" viewBox="0 0 '+w+' '+h+'" xmlns="http://www.w3.org/2000/svg">'+p.join('')+'</svg>';
 }
 function fieldBaseSvg(orientation){
@@ -1131,15 +1137,11 @@ function fieldBaseSvg(orientation){
   if(orientation==='offense'){
     parts.push('<line x1="20" y1="'+(H-24)+'" x2="'+(W-20)+'" y2="'+(H-24)+'" stroke="#ffffff" stroke-width="3"></line>');
     parts.push('<circle cx="'+(W/2)+'" cy="'+(H-24)+'" r="7" fill="#ffffff"></circle>');
-    parts.push('<rect x="'+(W/2-90)+'" y="34" width="180" height="86" fill="none" stroke="#ffffff" stroke-width="3"></rect>');
-    parts.push('<rect x="'+(W/2-48)+'" y="34" width="96" height="52" fill="none" stroke="#ffffff" stroke-width="2.5"></rect>');
-    parts.push('<rect x="'+(W/2-20)+'" y="24" width="40" height="16" fill="none" stroke="#ffffff" stroke-width="3"></rect>');
+    parts.push(goalAreaSvg(W/2,34,true,1.1));
   } else {
     parts.push('<line x1="20" y1="24" x2="'+(W-20)+'" y2="24" stroke="#ffffff" stroke-width="3"></line>');
     parts.push('<circle cx="'+(W/2)+'" cy="24" r="7" fill="#ffffff"></circle>');
-    parts.push('<rect x="'+(W/2-90)+'" y="'+(H-120)+'" width="180" height="86" fill="none" stroke="#ffffff" stroke-width="3"></rect>');
-    parts.push('<rect x="'+(W/2-48)+'" y="'+(H-86)+'" width="96" height="52" fill="none" stroke="#ffffff" stroke-width="2.5"></rect>');
-    parts.push('<rect x="'+(W/2-20)+'" y="'+(H-40)+'" width="40" height="16" fill="none" stroke="#ffffff" stroke-width="3"></rect>');
+    parts.push(goalAreaSvg(W/2,H-34-72*1.1,false,1.1));
   }
   [149,291].forEach(function(x){parts.push('<line x1="'+x+'" y1="8" x2="'+x+'" y2="'+(H-8)+'" stroke="rgba(255,255,255,0.30)" stroke-width="1" stroke-dasharray="4,4"></line>');});
   [159,311].forEach(function(y){parts.push('<line x1="8" y1="'+y+'" x2="'+(W-8)+'" y2="'+y+'" stroke="rgba(255,255,255,0.30)" stroke-width="1" stroke-dasharray="4,4"></line>');});

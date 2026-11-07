@@ -73,7 +73,7 @@ Verantwortlich: Max Woetzel (Head-Coach Herren).
   Überzahl und Unterzahl 1/2 zeigen ein Feld mit Linien (`fieldBgSvg`, Maßstab 20 Einheiten je Meter:
   Torraum (Rechteck) mit Tor (Netz) oben und Schutzraum darunter, Proportionen nach Vorlage des Vereins; `LF_DIM` = Seitenverhältnis). Positionen in `FM_POS` liegen so, dass kein
   Slot auf einer Linie oder einem anderen Slot liegt. Überzahl: Tor oben, Unterzahl: Tor unten. Die Alternative Aufstellung ist wie Reihen 1–3 ein Raster ohne Feld.
-  Reihen 1–3 bleiben bewusst das Raster ohne Feld (Offense links/rechts vor dem Center, `.slot-grid-off`).
+  Schussfeld und Zusammenfassung nutzen dieselbe Torraum-Zeichnung (`goalAreaSvg`). Reihen 1–3 bleiben bewusst das Raster ohne Feld (Offense links/rechts vor dem Center, `.slot-grid-off`).
 
 **Getestet** wurde mit simulierten Daten im Browser und mit Node (Syntax, Rechenlogik). **Nicht getestet:** echtes Spiel, echtes Tablet,
 Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie bei beendeten Spielen angenommen), Strafen live.
