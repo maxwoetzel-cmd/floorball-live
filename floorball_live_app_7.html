@@ -271,10 +271,6 @@
         <button type="button" onclick="undoBully()" style="flex:0 0 auto;">Rückgängig</button>
       </div>
       <div class="row" style="margin-top:8px;">
-        <button type="button" onclick="addSpecial('Überzahl')" style="flex:1;">+ Überzahl manuell</button>
-        <button type="button" onclick="addSpecial('Unterzahl')" style="flex:1;">+ Unterzahl manuell</button>
-      </div>
-      <div class="row" style="margin-top:8px;">
         <button type="button" id="en-btn" onclick="toggleEmptyNet()" style="flex:1;">Torwart raus (Empty Net)</button>
         <button type="button" onclick="undoLastShot()" style="flex:1;">Letzten Schuss löschen</button>
       </div>
@@ -298,6 +294,13 @@
       <button type="button" class="web-only" onclick="importSmSpecials()" style="width:100%; margin-bottom:8px;">Jetzt aus dem Saisonmanager aktualisieren</button>
       <div id="special-list"></div>
       <div id="special-summary" style="margin-top:8px;"></div>
+      <details id="manual-special" open style="margin-top:8px;">
+        <summary style="cursor:pointer; padding:6px 0; color:var(--text-secondary);">Notfall: Über-/Unterzahl manuell erfassen</summary>
+        <div class="row">
+          <button type="button" onclick="addSpecial('Überzahl')" style="flex:1;">+ Überzahl</button>
+          <button type="button" onclick="addSpecial('Unterzahl')" style="flex:1;">+ Unterzahl</button>
+        </div>
+      </details>
       <div class="row" style="margin-top:10px;">
         <button type="button" onclick="downloadSpecialCsv()" style="flex:1;">Über-/Unterzahl als CSV</button>
       </div>
@@ -384,9 +387,17 @@ function usName(){return state.teamUs||'Wir';}
 function oppName(){return state.teamOpp||'Gegner';}
 function curMinute(){return parseFloat(document.getElementById('current-minute').value)||0;}
 function playerById(id){return state.roster.find(function(p){return p.id===id;});}
+// Anzeigename: Vorname (bei gleichem Vornamen mit Initial des Nachnamens), ohne Vornamen der gespeicherte Name
+function firstOf(p){var f=p.first||''; return f.length<=14?f:f.split(' ')[0];}
+function shownName(p){
+  var f=firstOf(p);
+  if(!f) return p.name||'Spieler';
+  var dup=state.roster.some(function(r){return r!==p&&firstOf(r)===f;});
+  return dup&&p.last?f+' '+p.last.charAt(0)+'.':f;
+}
 function playerLabel(p){
   if(!p) return '';
-  var s=(p.nr?p.nr+' ':'')+(p.name||'Spieler');
+  var s=(p.nr?p.nr+' ':'')+(shownName(p)||'Spieler');
   if(p.isCaptain) s+=' (K)';
   if(p.isGoalie) s+=' (T)';
   else if(p.pos) s+=' – '+p.pos;
@@ -459,7 +470,7 @@ function renderPhase(){
     else{btn.textContent='Spiel beenden';}
   } else {btn.textContent='Zurück zur Pause'; btn.className='phase-btn'; label='Spiel beendet';}
   document.getElementById('tb-period').textContent=label;
-  updateTopbar(); updateMinuteCaption(); updateJerseyButtons(); renderSummary();
+  updateTopbar(); updateMinuteCaption(); updateJerseyButtons(); renderSummary(); updateSmPolling();
 }
 var confirmEndTimer=null;
 function phaseMain(){
@@ -561,20 +572,17 @@ function fieldsHtml(shots){
 }
 function playtimeTableHtml(period){
   var idx=PERIODS.indexOf(state.period), plist=period?[period]:PERIODS.slice(0,idx+1);
-  var pmAll=computePlusMinus(), pmP=period?computePlusMinus(period):null;
   var list=sortedRoster().filter(function(p){return p.present||p.events.length;});
-  var firstNames=firstNameLabels(list);
   var head='<tr><th>Nr</th><th>Name</th>'+(period
-    ?'<th>Min Drittel</th><th>Min gesamt</th><th>+/- Drittel</th><th>+/- gesamt</th>'
-    :plist.map(function(x){return '<th>'+esc(x.replace('. Drittel','.'))+'</th>';}).join('')+'<th>Gesamt</th><th>+/-</th>')+'</tr>';
+    ?'<th>Min Drittel</th><th>Min gesamt</th>'
+    :plist.map(function(x){return '<th>'+esc(x.replace('. Drittel','.'))+'</th>';}).join('')+'<th>Gesamt</th>')+'</tr>';
   var rows=list.map(function(p){
-    var cells;
-    if(period) cells='<td>'+Math.round(computePlayerMinutes(p,period))+'</td><td>'+Math.round(computePlayerMinutes(p))+'</td><td>'+fmtPm(pmP[p.id])+'</td><td>'+fmtPm(pmAll[p.id])+'</td>';
-    else cells=plist.map(function(x){return '<td>'+Math.round(computePlayerMinutes(p,x))+'</td>';}).join('')+'<td>'+Math.round(computePlayerMinutes(p))+'</td><td>'+fmtPm(pmAll[p.id])+'</td>';
-    return '<tr><td>'+esc(p.nr||'')+'</td><td>'+esc(firstNames[p.id]||p.name||'')+(p.isGoalie?' (T)':'')+'</td>'+cells+'</tr>';
+    var cells=period
+      ?'<td>'+Math.round(computePlayerMinutes(p,period))+'</td><td>'+Math.round(computePlayerMinutes(p))+'</td>'
+      :plist.map(function(x){return '<td>'+Math.round(computePlayerMinutes(p,x))+'</td>';}).join('')+'<td>'+Math.round(computePlayerMinutes(p))+'</td>';
+    return '<tr><td>'+esc(p.nr||'')+'</td><td>'+esc(shownName(p))+(p.isGoalie?' (T)':'')+'</td>'+cells+'</tr>';
   }).join('');
-  return '<table>'+head+(rows||'<tr><td colspan="6" class="muted">Keine Spieler.</td></tr>')+'</table>'+
-    '<p class="muted" style="margin:6px 0 0;">+/-: Tore für uns minus Gegentore, solange der Spieler auf dem Eis stand'+(period?' („Drittel“ = nur dieses Drittel, „gesamt“ = im ganzen Spiel bisher).':'.')+'</p>';
+  return '<table>'+head+(rows||'<tr><td colspan="4" class="muted">Keine Spieler.</td></tr>')+'</table>';
 }
 // Vorname (erster Teil); bei gleichem Vornamen mit Initial des Nachnamens
 function firstNameLabels(list){
@@ -624,7 +632,7 @@ function summaryHtml(period){
       h+='<details style="margin-top:8px;"><summary style="cursor:pointer; padding:6px 0; color:var(--text-secondary);">Schussbilder '+esc(p)+'</summary>'+fieldsHtml(shotsOf(p))+goalieTableHtml(shotsOf(p))+'</details>';
     });
   }
-  h+='<h3 style="margin-top:14px;">Spielzeiten (Minuten) und Plus/Minus</h3>'+playtimeTableHtml(period);
+  h+='<h3 style="margin-top:14px;">Spielzeiten (Minuten)</h3>'+playtimeTableHtml(period);
   h+='<h3 style="margin-top:14px;">Bully</h3>'+bullyTableHtml(period);
   h+='<h3 style="margin-top:14px;">Über-/Unterzahl</h3>'+miniStatsHtml(period);
   return h;
@@ -704,6 +712,13 @@ function importSmSpecials(silent){
     if(!silent) showToast(segs.length+' Über-/Unterzahl aus dem Saisonmanager');
     return segs.length;
   }).catch(function(e){if(!silent) showToast('Saisonmanager: '+e.message); return 0;});
+}
+// Im laufenden Drittel holt die App die Strafen des Saisonmanagers jede Minute neu
+var smPollTimer=null;
+function updateSmPolling(){
+  var on=inWebApp()&&state.phase==='play'&&state.game&&state.game.id;
+  if(on&&!smPollTimer) smPollTimer=setInterval(function(){importSmSpecials(true);},60000);
+  if(!on&&smPollTimer){clearInterval(smPollTimer); smPollTimer=null;}
 }
 function toggleEmptyNet(){
   if(!isLive()){showToast('Nur im laufenden Drittel'); return;}
@@ -1388,7 +1403,7 @@ function loadSmRoster(){
     smRoster=list||[];
     if(!smRoster.length){el.innerHTML='<p class="muted" style="margin:8px 0;">Keine Spieler gefunden (noch keine beendeten Spiele?).</p>'; return;}
     el.innerHTML='<p class="muted" style="margin:8px 0;">'+smRoster.length+' Spieler aus den letzten Spielen:</p>'+
-      '<div class="chip-grid">'+displayNames(smRoster).map(function(o){return '<span class="chip">'+esc((o.p.nr==null?'':o.p.nr+' ')+o.name+(o.p.goalie?' (T)':''))+'</span>';}).join('')+'</div>'+
+      '<div class="chip-grid">'+displayNames(smRoster).map(function(o){return '<span class="chip">'+esc((o.p.nr==null?'':o.p.nr+' ')+(o.p.first||o.name)+(o.p.goalie?' (T)':''))+'</span>';}).join('')+'</div>'+
       '<button type="button" class="primary" style="width:100%; margin-top:10px;" onclick="applySmRoster()">Abgleichen und neue Spieler ergänzen</button>';
   }).catch(function(e){el.innerHTML='<p class="muted" style="margin:8px 0; color:var(--danger);">Kader nicht geladen: '+esc(e.message)+'</p>';});
 }
@@ -1494,8 +1509,8 @@ function downloadSpecialCsv(){
 }
 function downloadRosterCsv(){
   var pm=computePlusMinus();
-  var rows=[['Nummer','Name','Kapitän','Torhüter','Position','Anwesend','Minuten','PlusMinus']];
-  sortedRoster().forEach(function(p){rows.push([p.nr, p.name, p.isCaptain?'ja':'', p.isGoalie?'ja':'', p.pos||'', p.present?'ja':'nein', Math.round(computePlayerMinutes(p)), pm[p.id]||0]);});
+  var rows=[['Nummer','Name','Kapitän','Torhüter','Position','Anwesend','Minuten']];
+  sortedRoster().forEach(function(p){rows.push([p.nr, p.first?(p.first+' '+(p.last||'')).trim():p.name, p.isCaptain?'ja':'', p.isGoalie?'ja':'', p.pos||'', p.present?'ja':'nein', Math.round(computePlayerMinutes(p))]);});
   downloadCsv('floorball_spielzeiten.csv',rows);
 }
 function hasGameData(){
@@ -1588,6 +1603,7 @@ if(inWebApp()){
   document.body.classList.add('webapp'); setDriveStatus('Drive: verbunden'); offerDriveRestore();
   // Antippen von "Gegner" öffnet die Spielliste (ohne Bildschirmtastatur; selbst tippen über "Gegner selbst eintippen")
   var oppIn=document.getElementById('team-opp'); oppIn.setAttribute('inputmode','none'); oppIn.placeholder='Gegner – antippen für Spielplan';
+  document.getElementById('manual-special').open=false; // manuelle Erfassung nur noch als Notfall
 }
 renderGameInfo();
 </script>
