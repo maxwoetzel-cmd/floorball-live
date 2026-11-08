@@ -191,12 +191,25 @@
   .sm-item{display:block; width:100%; text-align:left; min-height:44px; margin:2px 0; font-size:15px;}
   .sm-clear{color:var(--danger);}
   .sm-empty{padding:8px; font-size:13px; color:var(--text-muted);}
+  /* Statuszeilen (Drive, Bildschirm) und Ereignisliste */
+  .status-warn{color:#fff !important; background:var(--danger); border-radius:8px; padding:6px 10px; font-weight:600;}
+  .status-hint{color:var(--accent) !important;}
+  body.phase-play #sec-events:not(.open) .sec-body{display:none;}
+  .ev-filter{margin-bottom:8px;}
+  .ev-list{max-height:420px; overflow-y:auto;}
+  .ev-row{display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-top:1px solid var(--border); padding:6px 0;}
+  .ev-row .ev-per{font-size:12px; color:var(--text-muted); min-width:44px;}
+  .ev-row .ev-min{width:62px; min-height:40px; padding:4px 6px;}
+  .ev-row .ev-what{flex:1; min-width:140px; font-size:14px;}
+  .ev-row select{min-height:40px; width:auto;}
+  .ev-dot{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle;}
 </style>
 </head>
 <body>
 
 <h1>Floorball live</h1>
 <div id="drive-status" class="muted" style="margin:-6px 0 8px;"></div>
+<div id="wake-status" class="muted status-hint" style="margin:-4px 0 8px; display:none;">Bildschirm bleibt nicht automatisch an. Bitte die Bildschirmsperre am Gerät für das Spiel auf „nie“ oder 30 Minuten stellen.</div>
 
 <div id="topbar">
   <div class="tb-row tb-score">
@@ -342,6 +355,19 @@
         <button type="button" id="fm-btn-U2" class="btn-fm btn-fm-uz" onclick="showFormation('U2')" style="flex:1;">Unterzahl 2</button>
       </div>
       <p class="muted" id="bully-live" style="margin:8px 0 0;"></p>
+    </section>
+
+    <section id="sec-events" data-ph="play break end">
+      <h2>Ereignisse <span id="ev-count" class="muted" style="font-weight:400;"></span>
+        <button type="button" class="toggle-btn" onclick="toggleSection('sec-events')">korrigieren ▾</button></h2>
+      <div class="sec-body">
+        <p class="muted" style="margin:0 0 8px;">Schüsse und Bullys, neueste oben. Minute und Ergebnis lassen sich direkt ändern, ✕ löscht den Eintrag. Falsche Zone: Eintrag löschen und neu erfassen.</p>
+        <div class="seg ev-filter" id="ev-filter">
+          <button type="button" data-f="cur" onclick="setEvFilter('cur')">Aktuelles Drittel</button>
+          <button type="button" data-f="all" onclick="setEvFilter('all')">Alle</button>
+        </div>
+        <div class="ev-list" id="ev-list"></div>
+      </div>
     </section>
 
     <section id="sec-lineup" data-ph="prep play break" data-step="2">
@@ -589,7 +615,7 @@ function renderPhase(){
     else{btn.textContent='Spiel beenden';}
   } else {btn.textContent='Zurück zur Pause'; btn.className='phase-btn'; label='Spiel beendet';}
   document.getElementById('tb-period').textContent=label;
-  updateTopbar(); updateMinuteCaption(); updateJerseyButtons(); renderSummary(); updateSmPolling(); renderPrepExtras(); updateFmButtons();
+  updateTopbar(); updateMinuteCaption(); updateJerseyButtons(); renderSummary(); updateSmPolling(); renderPrepExtras(); updateFmButtons(); updateWakeLock();
 }
 var confirmEndTimer=null;
 function phaseMain(){
@@ -614,6 +640,7 @@ function resetGameData(){
   state.shots=[]; state.specials=[]; state.bullies=[]; state.nextShotId=1; state.nextSpecialId=1; state.nextBullyId=1;
   state.roster.forEach(function(p){p.events=[]; p.onField=false;});
   state.emptyNet=false; state.lineup.extra=null; state.pendingZone=null; state.period='1. Drittel'; state.minute=0;
+  state.periodStarts={}; state.periodEnds={};
 }
 function beginGame(){
   if(!hasGameData()){startPeriod('1. Drittel'); return;}
@@ -678,12 +705,18 @@ function startPeriod(name){
   if(state.phase==='prep' && !state.roster.some(function(p){return p.present;})){showToast('Erst oben die anwesenden Spieler wählen'); return;}
   state.period=name; state.minute=0; document.getElementById('current-minute').value=0;
   state.phase='play'; state.step=1; state.resume=''; state.pendingZone=null; selectedSlot=null;
+  // Uhrzeit des Anpfiffs (Grundlage für Video-Zeitmarken); beim erneuten Start desselben Drittels bleibt der erste Wert
+  if(!state.periodStarts) state.periodStarts={};
+  if(!state.periodStarts[name]) state.periodStarts[name]=Date.now();
+  evFilter='cur';
   var n=resumeAll(true);
-  document.getElementById('sec-lineup').classList.remove('open'); document.getElementById('sec-stats').classList.remove('open');
+  ['sec-lineup','sec-stats','sec-events'].forEach(function(id){document.getElementById(id).classList.remove('open');});
   save(); renderAll(); showToast(name+' gestartet – '+n+' Spieler auf dem Eis');
 }
 function endPeriod(){
   closeOpenIntervals();
+  if(!state.periodEnds) state.periodEnds={};
+  state.periodEnds[state.period]=Date.now();
   state.emptyNet=false; state.lineup.extra=null; selectedSlot=null; state.pendingZone=null;
   if(state.period!=='Verlängerung'){state.minute=20; document.getElementById('current-minute').value=20;}
   state.phase='break'; save(); renderAll(); showToast(state.period+' beendet');
@@ -1216,18 +1249,18 @@ function activeGoalieId(){
 function confirmShot(outcome){
   if(!state.pendingZone) return;
   var onIds=state.roster.filter(function(p){return p.onField;}).map(function(p){return p.id;});
-  var shot={id:state.nextShotId++, period:state.period, team:state.currentTeam, zone:state.pendingZone.name, outcome:outcome, minute:curMinute(), onFieldIds:onIds};
+  var shot={id:state.nextShotId++, period:state.period, team:state.currentTeam, zone:state.pendingZone.name, outcome:outcome, minute:curMinute(), ts:Date.now(), onFieldIds:onIds};
   if(state.currentTeam==='Gegner') shot.goalieId=activeGoalieId();
   if(state.emptyNet) shot.emptyNet=true;
   state.shots.push(shot);
   state.pendingZone=null;
   document.getElementById('outcome-bar').classList.remove('show');
-  save(); renderShots(); renderStats(); renderPlaytimes();
+  save(); renderShots(); renderStats(); renderPlaytimes(); renderEvents();
   try{ if(navigator.vibrate) navigator.vibrate(30); }catch(e){}
   showToast((shot.team==='Gegner'?oppName():usName())+': '+outcome);
 }
 function cancelShot(){state.pendingZone=null; document.getElementById('outcome-bar').classList.remove('show'); renderShots();}
-function undoLastShot(){if(!state.shots.length)return; state.shots.pop(); save(); renderShots(); renderStats(); renderPlaytimes();}
+function undoLastShot(){if(!state.shots.length)return; state.shots.pop(); save(); renderShots(); renderStats(); renderPlaytimes(); renderEvents();}
 function zoneCenterForCurrentView(zoneName){
   var parts=zoneName.split('-'), rows=currentRows();
   var col=ZONE_COLS.find(function(c){return c.key===parts[1];});
@@ -1254,13 +1287,13 @@ function renderShots(){
 }
 
 function addBully(won){
-  state.bullies.push({id:state.nextBullyId++, period:state.period, minute:curMinute(), won:won});
-  save(); renderBullies();
+  state.bullies.push({id:state.nextBullyId++, period:state.period, minute:curMinute(), ts:Date.now(), won:won});
+  save(); renderBullies(); renderEvents();
   showToast('Bully '+(won?'gewonnen':'verloren')+' erfasst · Min '+curMinute()+' · '+bullyCounts().w+' : '+bullyCounts().l);
 }
 function undoBully(){
   if(!state.bullies.length){showToast('Kein Bully zum Zurücknehmen'); return;}
-  var last=state.bullies.pop(); save(); renderBullies();
+  var last=state.bullies.pop(); save(); renderBullies(); renderEvents();
   showToast('Letzter Bully ('+(last.won?'gewonnen':'verloren')+') zurückgenommen · '+bullyCounts().w+' : '+bullyCounts().l);
 }
 // Bullys des aktuellen Drittels: gewonnen / verloren
@@ -1347,7 +1380,7 @@ function renderGoalieStats(){
 }
 
 function addSpecial(type){
-  state.specials.push({id:state.nextSpecialId++, type:type, period:state.period, minute:curMinute(), success:null, goalsFor:0, goalsAgainst:0});
+  state.specials.push({id:state.nextSpecialId++, type:type, period:state.period, minute:curMinute(), ts:Date.now(), success:null, goalsFor:0, goalsAgainst:0});
   save(); renderSpecials(); showToast(type+' erfasst (Min '+curMinute()+')');
 }
 function updateSpecial(id,field,value){
@@ -1384,6 +1417,101 @@ function renderSpecialSummary(){
     '<tr><td>Überzahl</td><td>'+pp.count+'</td><td>'+pct(pp.success,pp.count)+'%</td><td>'+pp.gf+'</td><td>'+pp.ga+'</td></tr>'+
     '<tr><td>Unterzahl</td><td>'+pk.count+'</td><td>'+pct(pk.success,pk.count)+'%</td><td>'+pk.gf+'</td><td>'+pk.ga+'</td></tr></table>';
 }
+
+/* ---------- Ereignisliste: Schüsse und Bullys nachträglich korrigieren ---------- */
+var evFilter='cur';
+function setEvFilter(f){evFilter=f; renderEvents();}
+function fmtClock(ts){return ts?new Date(ts).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'';}
+function evPeriodShort(p){return {'1. Drittel':'1. Dr.','2. Drittel':'2. Dr.','3. Drittel':'3. Dr.','Verlängerung':'Verl.'}[p]||p;}
+function evList(){
+  var onlyCur=(evFilter==='cur' && state.phase==='play');
+  var items=[];
+  state.shots.forEach(function(s){items.push({kind:'shot', o:s});});
+  state.bullies.forEach(function(b){items.push({kind:'bully', o:b});});
+  if(onlyCur) items=items.filter(function(it){return it.o.period===state.period;});
+  // neueste oben: Drittel, dann Minute, dann Erfassungszeit bzw. Reihenfolge
+  items.sort(function(a,b){
+    var pa=PERIODS.indexOf(a.o.period), pb=PERIODS.indexOf(b.o.period);
+    if(pa!==pb) return pb-pa;
+    var ma=a.o.minute||0, mb=b.o.minute||0;
+    if(ma!==mb) return mb-ma;
+    return (b.o.ts||b.o.id)-(a.o.ts||a.o.id);
+  });
+  return items;
+}
+function renderEvents(){
+  var el=document.getElementById('ev-list'); if(!el) return;
+  var filt=document.getElementById('ev-filter');
+  if(filt){
+    filt.style.display=state.phase==='play'?'':'none';
+    filt.querySelectorAll('button').forEach(function(b){b.classList.toggle('active', b.dataset.f===evFilter);});
+  }
+  var items=evList();
+  var cnt=document.getElementById('ev-count'); if(cnt) cnt.textContent='('+items.length+')';
+  if(!items.length){el.innerHTML='<p class="muted" style="padding:6px 0;">Noch keine Einträge.</p>'; return;}
+  el.innerHTML=items.map(function(it){
+    var o=it.o, k=it.kind;
+    var minIn='<input type="number" class="ev-min" min="0" max="20" step="1" inputmode="numeric" value="'+(o.minute==null?'':o.minute)+'" onchange="setEvMinute(\''+k+'\','+o.id+',this.value)" aria-label="Minute">';
+    var what, sel;
+    if(k==='shot'){
+      var col=teamColor[o.team]||'#888';
+      what='<span class="ev-dot" style="background:'+col+';"></span>'+esc(o.team==='Wir'?usName():oppName())+' · '+esc(zoneLabel(o.zone))+(o.emptyNet?' · EN':'');
+      sel='<select onchange="setShotOutcome('+o.id+',this.value)" aria-label="Ergebnis">'+['Tor','Aufs Tor','Daneben'].map(function(v){return '<option'+(v===o.outcome?' selected':'')+'>'+v+'</option>';}).join('')+'</select>';
+    } else {
+      what='Bully';
+      sel='<select onchange="setBullyWon('+o.id+',this.value===\'1\')" aria-label="Bully">'+
+        '<option value="1"'+(o.won?' selected':'')+'>gewonnen</option><option value="0"'+(!o.won?' selected':'')+'>verloren</option></select>';
+    }
+    return '<div class="ev-row"><span class="ev-per" title="'+esc(fmtClock(o.ts))+'">'+evPeriodShort(o.period)+'<br>'+(o.ts?fmtClock(o.ts).slice(0,5):'')+'</span>'+minIn+
+      '<span class="ev-what">'+what+'</span>'+sel+
+      '<button type="button" class="icon-btn" aria-label="Löschen" onclick="deleteEvent(\''+k+'\','+o.id+')">&times;</button></div>';
+  }).join('');
+}
+function evFind(kind,id){return (kind==='shot'?state.shots:state.bullies).find(function(x){return x.id===id;});}
+function evChanged(kind){
+  save(); renderEvents();
+  if(kind==='shot'){renderShots(); renderStats(); renderPlaytimes(); updateTopbar(); renderSummary();}
+  else{renderBullies(); renderSummary();}
+}
+function setEvMinute(kind,id,val){
+  var o=evFind(kind,id); if(!o) return;
+  var m=parseFloat(val); if(isNaN(m)||m<0) m=0;
+  o.minute=m; evChanged(kind); showToast('Minute geändert: '+m);
+}
+function setShotOutcome(id,val){var o=evFind('shot',id); if(!o) return; o.outcome=val; evChanged('shot'); showToast('Schuss geändert: '+val);}
+function setBullyWon(id,won){var o=evFind('bully',id); if(!o) return; o.won=won; evChanged('bully'); showToast('Bully geändert: '+(won?'gewonnen':'verloren'));}
+function deleteEvent(kind,id){
+  var o=evFind(kind,id); if(!o) return;
+  var label=kind==='shot'?'Schuss '+(o.team==='Wir'?usName():oppName())+' ('+o.outcome+', Min '+o.minute+')':'Bully ('+(o.won?'gewonnen':'verloren')+', Min '+o.minute+')';
+  if(!confirm(label+' löschen?')) return;
+  if(kind==='shot') state.shots=state.shots.filter(function(x){return x.id!==id;});
+  else state.bullies=state.bullies.filter(function(x){return x.id!==id;});
+  evChanged(kind); showToast('Gelöscht: '+label);
+}
+
+/* ---------- Bildschirm wach halten (während Drittel und Pause) ---------- */
+var wakeLock=null, wakePending=false;
+function wantWake(){return state.phase==='play'||state.phase==='break';}
+function showWakeHint(show){var el=document.getElementById('wake-status'); if(el) el.style.display=show?'block':'none';}
+function updateWakeLock(){
+  if(!wantWake()){
+    showWakeHint(false);
+    if(wakeLock){try{wakeLock.release();}catch(e){} wakeLock=null;}
+    return;
+  }
+  if(wakeLock||wakePending||document.visibilityState!=='visible') return;
+  if(!navigator.wakeLock||!navigator.wakeLock.request){showWakeHint(true); return;}
+  wakePending=true;
+  navigator.wakeLock.request('screen').then(function(l){
+    wakePending=false; wakeLock=l; showWakeHint(false);
+    l.addEventListener('release',function(){wakeLock=null;});
+    if(!wantWake()){try{l.release();}catch(e){}}
+  }).catch(function(){wakePending=false; showWakeHint(true);});
+}
+document.addEventListener('visibilitychange',function(){
+  if(document.visibilityState==='visible') updateWakeLock();
+  else flushDriveSave(); // App geht in den Hintergrund: sofort nach Drive sichern
+});
 
 function loadBulkRoster(){
   var raw=document.getElementById('roster-bulk').value;
@@ -1824,19 +1952,57 @@ function loadSmLineup(){
     save(); renderRosterAll();
   }).catch(function(e){presentNote='Saisonmanager: '+e.message; renderRosterAll();});
 }
-function setDriveStatus(t){var el=document.getElementById('drive-status'); if(el) el.textContent=t;}
+function setDriveStatus(t){var el=document.getElementById('drive-status'); if(el){el.textContent=t; el.classList.remove('status-warn');}}
 // Spielstand ein paar Sekunden nach der letzten Änderung automatisch nach Drive sichern
+/* Drive-Autosave: 15 Sekunden nach der letzten Änderung. Schlägt er fehl, versucht die App es automatisch erneut
+   (10, 20, 30 … höchstens 60 Sekunden Abstand) und warnt deutlich, wenn länger als 2 Minuten nichts gesichert wurde. */
+var driveDirty=false, driveDirtySince=0, driveBusy=false, driveFails=0, driveLastOk=0;
+var DRIVE_WARN_MS=120000;
 function scheduleDriveSave(){
   if(!inWebApp()) return;
+  if(!driveDirty){driveDirty=true; driveDirtySince=Date.now();}
+  if(driveFails>0) return; // Wiederholung ist bereits geplant
   clearTimeout(driveTimer);
-  driveTimer=setTimeout(function(){
-    if(!hasGameData() && state.roster.length===0) return; // leeren Stand nie über einen echten schreiben
-    var payload={version:6, exportedAt:new Date().toISOString(), state:state};
-    gsRun('saveFile',['spielstand_aktuell.json', JSON.stringify(payload), true])
-      .then(function(){setDriveStatus('Drive: gesichert '+new Date().toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'}));})
-      .catch(function(){setDriveStatus('Drive-Sicherung fehlgeschlagen – bitte exportieren');});
-  },15000);
+  driveTimer=setTimeout(runDriveSave,15000);
 }
+function flushDriveSave(){if(inWebApp() && driveDirty && !driveBusy) runDriveSave();}
+function runDriveSave(){
+  clearTimeout(driveTimer); driveTimer=null;
+  if(!driveDirty) return;
+  if(!hasGameData() && state.roster.length===0){driveDirty=false; return;} // leeren Stand nie über einen echten schreiben
+  if(driveBusy){driveTimer=setTimeout(runDriveSave,5000); return;}
+  var since=driveDirtySince;
+  driveBusy=true; driveDirty=false;
+  var payload={version:6, exportedAt:new Date().toISOString(), state:state};
+  gsRun('saveFile',['spielstand_aktuell.json', JSON.stringify(payload), true])
+    .then(function(){
+      driveBusy=false; driveFails=0; driveLastOk=Date.now();
+      if(driveDirty){clearTimeout(driveTimer); driveTimer=setTimeout(runDriveSave,15000);} // Änderungen während des Speicherns
+      updateDriveStatus();
+    })
+    .catch(function(){
+      driveBusy=false; driveDirty=true; driveDirtySince=since; driveFails++;
+      clearTimeout(driveTimer); driveTimer=setTimeout(runDriveSave, Math.min(60000, 10000*driveFails));
+      updateDriveStatus();
+    });
+}
+function updateDriveStatus(){
+  if(!inWebApp()) return;
+  var el=document.getElementById('drive-status'); if(!el) return;
+  var hhmm=function(t){return new Date(t).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit'});};
+  var warn=false, txt;
+  if(driveFails>0){
+    var mins=Math.floor((Date.now()-driveDirtySince)/60000);
+    warn=(Date.now()-driveDirtySince)>DRIVE_WARN_MS;
+    txt=warn?'⚠ Drive: seit '+mins+' Min. nicht gesichert. Verbindung prüfen, notfalls „Spielstand exportieren“. Neue Versuche laufen automatisch.'
+            :'Drive: Sicherung fehlgeschlagen, neuer Versuch läuft …'+(driveLastOk?' (zuletzt gesichert '+hhmm(driveLastOk)+')':'');
+  } else if(driveLastOk){
+    txt='Drive: gesichert '+hhmm(driveLastOk)+(driveDirty?' · Änderungen werden gleich gesichert':'');
+  } else return; // Startmeldung stehen lassen
+  el.textContent=txt; el.classList.toggle('status-warn',warn);
+}
+setInterval(updateDriveStatus,30000);
+window.addEventListener('online',function(){if(driveFails>0) flushDriveSave();});
 // Ist der Browserspeicher leer: gesicherten Spielstand aus Drive anbieten, sonst den Stammkader laden
 function offerDriveRestore(){
   if(!inWebApp()||hasGameData()||state.roster.length>0) return;
@@ -1883,9 +2049,9 @@ function saveFile(blob,filename){
   return Promise.resolve(true);
 }
 function downloadShotsCsv(){
-  var rows=[['Spiel','Drittel','Minute','Team','Ansicht','Zone','Ergebnis','Empty Net']];
+  var rows=[['Spiel','Drittel','Minute','Team','Ansicht','Zone','Ergebnis','Empty Net','Uhrzeit']];
   var match=usName()+' vs '+oppName();
-  state.shots.forEach(function(s){rows.push([match, s.period, s.minute==null?'':s.minute, s.team==='Wir'?usName():oppName(), s.team==='Wir'?'Offense':'Defense', zoneLabel(s.zone), s.outcome, s.emptyNet?'ja':'']);});
+  state.shots.forEach(function(s){rows.push([match, s.period, s.minute==null?'':s.minute, s.team==='Wir'?usName():oppName(), s.team==='Wir'?'Offense':'Defense', zoneLabel(s.zone), s.outcome, s.emptyNet?'ja':'', fmtClock(s.ts)]);});
   downloadCsv('floorball_schuesse.csv',rows);
 }
 function downloadSpecialCsv(){
@@ -1977,7 +2143,7 @@ function newGame(btn){
     setTimeout(function(){if(btn.dataset.confirm==='1'){btn.dataset.confirm='0'; btn.textContent='Neues Spiel'; btn.classList.remove('danger-confirm');}},3500);
   }
 }
-function renderAll(){renderField(); renderStats(); renderSpecials(); renderBullies(); renderRosterAll(); renderPhase();}
+function renderAll(){renderField(); renderStats(); renderSpecials(); renderBullies(); renderRosterAll(); renderPhase(); renderEvents();}
 
 load();
 // Browser bitten, den Speicher nicht automatisch zu räumen (hilft v.a. auf iPad/iPhone)

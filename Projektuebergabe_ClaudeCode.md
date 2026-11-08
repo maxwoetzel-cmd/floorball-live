@@ -75,6 +75,12 @@ Verantwortlich: Max Woetzel (Head-Coach Herren).
   Slot auf einer Linie oder einem anderen Slot liegt. Überzahl: Tor oben, Unterzahl: Tor unten. Die Alternative Aufstellung ist wie Reihen 1–3 ein Raster ohne Feld.
   Schussfeld und Zusammenfassung nutzen dieselbe Torraum-Zeichnung (`goalAreaSvg`). Reihen 1–3 bleiben bewusst das Raster ohne Feld (Offense links/rechts vor dem Center, `.slot-grid-off`).
 
+- Paket 1 (08.11.2026, Betriebssicherheit):
+  - **Bildschirm wach** (`updateWakeLock`, Wake Lock API) während Drittel und Pause. Klappt das nicht, erscheint ein Hinweis (`#wake-status`), die Bildschirmsperre am Gerät zu verlängern.
+  - **Drive-Autosave mit Wiederholung** (`runDriveSave`, `updateDriveStatus`): Bei Fehlern neuer Versuch nach 10/20/30 … max. 60 s, rote Warnung nach 2 Minuten ohne Sicherung, sofortige Sicherung beim Wechsel in den Hintergrund und bei wiederkehrender Verbindung.
+  - **Ereignisliste** (`#sec-events`, `renderEvents`): Schüsse und Bullys, neueste oben, Minute und Ergebnis änderbar, Löschen mit Rückfrage. Im Drittel eingeklappt („korrigieren ▾“), Filter aktuelles Drittel/alle. Zone ist nicht änderbar (löschen und neu erfassen).
+  - **Uhrzeit-Stempel** `ts` (ms) an Schüssen, Bullys und manuellen Specials sowie `state.periodStarts`/`state.periodEnds` je Drittel (Grundlage für Paket 2: YouTube-Zeitmarken). Schuss-CSV hat die Spalte „Uhrzeit“.
+
 **Getestet** wurde mit simulierten Daten im Browser und mit Node (Syntax, Rechenlogik). **Nicht getestet:** echtes Spiel, echtes Tablet,
 Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie bei beendeten Spielen angenommen), Strafen live.
 
@@ -88,6 +94,10 @@ Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie 
 6. Optional: Spielzeit je Drittel mit eingestellter Minute statt fest 20 (bewusst abgelehnt, bleibt bei 20).
 7. Optional: Zusammenfassung als Datei (PDF/HTML) in Drive ablegen.
 8. GitHub-Konto mit Zwei-Faktor-Anmeldung absichern (siehe Fallstricke).
+9. Prüfen, ob die Wake Lock API in der Apps-Script-Web-App (eingebettetes Fenster) auf dem Tablet erlaubt ist. Im Testbrowser wurde sie abgelehnt, dann greift nur der Hinweis.
+10. Paket 2: YouTube-Zeitmarken (Videozeit je Drittelanpfiff eintragen → Text für die Beschreibung mit Drittelbeginn, Toren, Gegentoren, Strafen; Marke einige Sekunden vor dem Ereignis). Daten: `ts`, `periodStarts`. Video: CapCut, Upload YouTube, Aufnahme pro Spiel, Drittelpausen teils geschnitten.
+11. Paket 3: Paralleles Erfassen mit zwei Geräten (ereignisbasierter Abgleich im Backend, Rollen Schüsse/Bullys bzw. Wechsel nur als Voreinstellung). Paket 4: Saisonauswertung und Spielbericht (alle dürfen alles sehen, Ablageort für Spieler offen).
+12. Geparkt: Reihe pro Schuss (Reihenwechsel alle 40–60 s, aktuell kein Bedarf).
 
 ---
 
@@ -125,6 +135,7 @@ Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie 
 - **Datenvermischung:** Wird ein Spiel mehrfach im selben Stand durchgespielt, überlagern sich die Zeiten. Dagegen sichert `beginGame` und löscht Altdaten. „Neues Spiel“ setzt ebenfalls zurück.
 - **Saisonmanager:** `401` ohne Schlüssel, kein CORS. Spielernamen sind personenbezogen (es gibt ein Feld `hide_public_last_name`). Daten nur für den Vereinsgebrauch.
 - **Drittelende ist fest Minute 20.** Beendet man ein Drittel im Test früher, zeigt die Auswertung trotzdem 20 Minuten.
+- **Browser-Pane von Claude Code** öffnet lokale Dateien nur als Standbild. Zum Testen eine Kopie mit Ersatzspeicher über einen kleinen lokalen Server ausliefern (`.claude/launch.json`, lokal von Git ausgeschlossen). Wake Lock wird dort abgelehnt, das ist kein Fehler der App.
 - **Git** meldet auf Windows „LF will be replaced by CRLF“. Das ist harmlos.
 
 ---
