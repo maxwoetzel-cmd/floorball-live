@@ -61,6 +61,25 @@ Ab Backend-Stand mit `listExports` (08.11.2026) lädt „Saison aus Drive laden�
 Ordner „Exporte“. Auch dafür ist einmal eine **neue Version der bestehenden Bereitstellung** nötig.
 Ohne sie meldet der Knopf einen Fehler; die Auswahl von Exportdateien funktioniert trotzdem.
 
+## Freigabeliste (wer darf die App nutzen)
+Standard: Jedes Konto der Domain (USV Jena e.V.) kann die Web-App öffnen und nutzen. Alles läuft im Namen von Max.
+Mit der **Skripteigenschaft `ALLOWED_USERS`** lässt sich das auf bestimmte Konten beschränken:
+
+1. Projekteinstellungen (Zahnrad) → ganz unten **Skripteigenschaften** → **Skripteigenschaft hinzufügen**.
+2. Name: `ALLOWED_USERS`. Wert: die E-Mail-Adressen, getrennt durch Komma, Semikolon, Leerzeichen oder Zeilenumbruch,
+   z. B. `floorball-tablet@usvjena.de, paulina.jacob@usvjena.de`. Speichern.
+3. Im Editor die Funktion `testZugriff` ausführen. Das Protokoll zeigt, ob die Liste aktiv ist und ob dein Konto freigegeben ist.
+
+Verhalten:
+- **Leer oder nicht vorhanden:** alle Konten der Domain dürfen (bisheriges Verhalten).
+- **Gefüllt:** nur die Konten in der Liste **und der Besitzer des Projekts (Max)**. Alle anderen sehen beim Öffnen „Kein Zugriff“
+  und können auch keine Server-Funktionen (Speichern, Spielplan, Saisonauswertung, gemeinsames Erfassen) nutzen.
+- Groß-/Kleinschreibung der Adressen ist egal. Das Tablet-Konto (`floorball-tablet@usvjena.de`) und alle Coaches, die erfassen sollen,
+  müssen in der Liste stehen, sonst sperren sie sich aus.
+- Wer sich versehentlich aussperrt: Max (Besitzer) kommt immer hinein und kann die Eigenschaft ändern oder löschen.
+- Der Code der Prüfung steht in `apps-script/Code.gs` (`allowedList_`, `isAllowed_`, `assertAllowed_`). Dafür ist einmal eine
+  **neue Version der bestehenden Bereitstellung** nötig. Die Adressen stehen nur in der Skripteigenschaft, nicht im öffentlichen Repository.
+
 ## Bekannte Grenzen (nicht getestet)
 - Die App braucht beim Laden Internet. Ohne Netz startet sie nicht.
 - Im Apps-Script-Fenster kann der Browserspeicher (`localStorage`) anders reagieren als bei der

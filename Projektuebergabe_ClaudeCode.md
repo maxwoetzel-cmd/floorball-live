@@ -30,6 +30,11 @@ Verantwortlich: Max Woetzel (Head-Coach Herren).
 - **Web-App im Konto von Max:** Ausführen als Max, Zugriff „Jeder in USV Jena e.V.“. Das Backend (`apps-script/Code.gs`)
   lädt die App-Datei aus **GitHub** (`main`, raw, 5 Minuten Cache im Skript, Rückfall: gleichnamige Datei im Drive-Ordner).
   Ein App-Update ist daher nur ein **Push**, in der Web-App nach ca. 10 Minuten sichtbar.
+- **Zugriff:** Die Web-App steht auf „Jeder in USV Jena e.V.“ und läuft im Namen von Max. Ohne weitere Einstellung darf **jedes** Konto der Domain
+  (auch andere Abteilungen) die App und alle Server-Funktionen nutzen. Mit der **Skripteigenschaft `ALLOWED_USERS`** (E-Mail-Adressen, durch Komma,
+  Semikolon, Leerzeichen oder Zeilenumbruch getrennt) lässt sich das auf eine **Freigabeliste** beschränken. Der Besitzer (Max) kommt immer hinein.
+  Nicht freigegebene Konten sehen „Kein Zugriff“. Geprüft wird in `doGet` und am Anfang jeder öffentlichen Backend-Funktion (`assertAllowed_`).
+  Die Adressen stehen nur in der Skripteigenschaft, nie im Repository.
 - **Saisonmanager nur über das Backend:** `https://saisonmanager.de/api/v2` sendet keine CORS-Header und braucht einen
   API-Schlüssel (Header `X-Api-Key`). Der Schlüssel liegt als **Skripteigenschaft `SAISONMANAGER_KEY`** (nie im Code,
   Repo, Chat oder Dokument). Liga Herren VL Ost = **2502**, Team USV Jena = **9942** (Saison 2026/27).
@@ -119,6 +124,9 @@ Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie 
 11. Paket 3 ist bereitgestellt (Backend 08.11.2026). Offen: Test mit zwei echten Geräten (Schuss auf Gerät 1, Wechsel auf Gerät 2, Offline-Phase, Neues Spiel).
 12. Paket 4 live schalten: `Code.gs` mit `listExports` einfügen, neue Version der bestehenden Bereitstellung (Nutzer). Danach Saison aus Drive laden und prüfen, ob doppelte Sicherungen richtig zusammengefasst werden und das Teilen-Menü in der Web-App aufgeht.
 13. Geparkt: Reihe pro Schuss (Reihenwechsel alle 40–60 s, aktuell kein Bedarf).
+14. **Freigabeliste** (08.11.2026): Code ist im Repo (`allowedList_`, `isAllowed_`, `assertAllowed_`, `testZugriff`), mit simulierten Konten getestet (sieben Fälle),
+    **noch nicht bereitgestellt**. Vorgehen: `Code.gs` einfügen, neue Version der bestehenden Bereitstellung (Nutzer, nicht am Spieltag), danach `ALLOWED_USERS`
+    setzen (Tablet-Konto und alle erfassenden Coaches nicht vergessen), `testZugriff` ausführen, mit einem nicht freigegebenen Konto prüfen („Kein Zugriff“).
 
 ---
 
@@ -161,6 +169,9 @@ Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie 
   Der Schalter steht im `localStorage`; im Apps-Script-Fenster kann er nach einem Neuladen aus sein. Dann erneut einschalten.
   Neue Felder im Spielstand sind automatisch geteilt. Gerätebezogene Felder in `SYNC_LOCAL_KEYS` eintragen.
 - **Test zweier Geräte ohne Apps Script:** Eine Testseite mit zwei iframes laden; in jede App-Kopie vor dem Skript einen Ersatz-`localStorage` und ein `window.google` einsetzen, dessen `script.run` an eine Nachbildung von `syncExchange` in der Elternseite geht (mit Verzögerung).
+- **Freigabeliste und Aussperren:** `ALLOWED_USERS` gefüllt = nur diese Konten plus Besitzer. Fehlt das Tablet-Konto, ist am Spieltag niemand am Tablet drin.
+  Liest Google die Adresse eines Kontos nicht (Konto außerhalb der Domain), wird es bei gefüllter Liste abgewiesen. Notausgang: Eigenschaft löschen (Max kommt immer hinein).
+  `Session.getActiveUser()` liefert die Adresse nur bei Konten derselben Domain wie der Besitzer.
 - **Git** meldet auf Windows „LF will be replaced by CRLF“. Das ist harmlos.
 
 ---

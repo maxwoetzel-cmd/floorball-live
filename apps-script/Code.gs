@@ -35,6 +35,14 @@ var CONFIG = {
  * ACHTUNG: Wer das Repository ändern kann, bestimmt den Code der App. GitHub-Konto mit 2FA schützen.
  */
 function doGet() {
+  if (!isAllowed_()) {
+    var who = currentUser_().replace(/[&<>"]/g, '');
+    return HtmlService.createHtmlOutput(
+      '<!doctype html><meta name="viewport" content="width=device-width, initial-scale=1">' +
+      '<body style="font-family:sans-serif; padding:24px; background:#14181b; color:#edeff0;">' +
+      '<h2>Kein Zugriff</h2><p>Das Konto <b>' + (who || 'unbekannt') + '</b> ist für Floorball Live nicht freigegeben.</p>' +
+      '<p>Bitte bei Max Woetzel melden.</p></body>').setTitle('Floorball Live');
+  }
   return HtmlService.createHtmlOutput(loadAppHtml_())
     .setTitle('Floorball Live')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1');
@@ -42,6 +50,7 @@ function doGet() {
 
 /** Spielplan der Liga (Rohdaten des Saisonmanagers). */
 function getSchedule() {
+  assertAllowed_();
   return apiGet_('leagues/' + CONFIG.LEAGUE_ID + '/schedule');
 }
 
@@ -101,6 +110,7 @@ function getRoster() {
  * Die Liste ist leer, solange dort noch nichts eingetragen ist.
  */
 function getGameLineup(gameId) {
+  assertAllowed_();
   gameId = parseInt(gameId, 10);
   if (!gameId) throw new Error('Spiel-ID fehlt.');
   var d = apiGet_('games/' + gameId);
@@ -121,6 +131,7 @@ function getGameLineup(gameId) {
  * Berechnung von Über-/Unterzahl. Leer, solange dort noch nichts eingetragen ist.
  */
 function getGameEvents(gameId) {
+  assertAllowed_();
   gameId = parseInt(gameId, 10);
   if (!gameId) throw new Error('Spiel-ID fehlt.');
   var d = apiGet_('games/' + gameId);
@@ -144,6 +155,7 @@ function getGameEvents(gameId) {
  * overwrite=true: gleichnamige Datei wird aktualisiert (z. B. für den laufenden Spielstand).
  */
 function saveFile(name, content, overwrite) {
+  assertAllowed_();
   name = String(name || '').replace(/[^\w.\- äöüÄÖÜß]/g, '_').slice(0, 120);
   if (!name) throw new Error('Dateiname fehlt.');
   content = String(content || '');
@@ -166,6 +178,7 @@ function saveFile(name, content, overwrite) {
 
 /** Liest eine Datei aus dem Ordner "Exporte" (neueste mit diesem Namen), sonst null. */
 function readFile(name) {
+  assertAllowed_();
   var it = DriveApp.getFolderById(CONFIG.EXPORT_FOLDER_ID).getFilesByName(String(name || ''));
   var newest = null;
   while (it.hasNext()) {
@@ -181,6 +194,7 @@ function readFile(name) {
  * desselben Spiels fasst die App zusammen.
  */
 function listExports() {
+  assertAllowed_();
   var it = DriveApp.getFolderById(CONFIG.EXPORT_FOLDER_ID).getFiles(), out = [];
   while (it.hasNext()) {
     var f = it.next(), n = f.getName();
@@ -218,6 +232,7 @@ function listExports() {
  * Antwort = { ok, version, data (nur wenn neuer als known), devices: [{dev, name}] }
  */
 function syncExchange(req) {
+  assertAllowed_();
   req = req || {};
   var lock = LockService.getScriptLock();
   lock.waitLock(15000);
@@ -271,6 +286,31 @@ function syncTouchDevice_(dev, name) {
 }
 
 /* ---------- privat ---------- */
+
+/**
+ * Freigabeliste: Skripteigenschaft ALLOWED_USERS (E-Mail-Adressen, getrennt durch Komma, Semikolon, Leerzeichen
+ * oder Zeilenumbruch). Ist sie leer, dürfen alle Konten der Domain die App nutzen (bisheriges Verhalten).
+ * Ist sie gefüllt, dürfen nur diese Konten und der Besitzer des Projekts (Max) die App und alle Server-Funktionen nutzen.
+ */
+function allowedList_() {
+  var raw = PropertiesService.getScriptProperties().getProperty('ALLOWED_USERS') || '';
+  return raw.split(/[\s,;]+/).map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
+}
+function currentUser_() {
+  var u = '';
+  try { u = Session.getActiveUser().getEmail() || ''; } catch (e) { u = ''; }
+  return u.toLowerCase();
+}
+function isAllowed_() {
+  var list = allowedList_();
+  if (!list.length) return true;
+  var me = currentUser_(), owner = '';
+  try { owner = (Session.getEffectiveUser().getEmail() || '').toLowerCase(); } catch (e) { owner = ''; }
+  return !!me && (me === owner || list.indexOf(me) !== -1);
+}
+function assertAllowed_() {
+  if (!isAllowed_()) throw new Error('Kein Zugriff für dieses Konto (' + (currentUser_() || 'unbekannt') + '). Bitte bei Max Woetzel melden.');
+}
 
 function loadAppHtml_() {
   var cache = CacheService.getScriptCache();
@@ -326,6 +366,7 @@ function testSchedule() {
  * z. B. leagues/2502/teams
  */
 function testPfad() {
+  assertAllowed_();
   var path = PropertiesService.getScriptProperties().getProperty('PROBE_PATH');
   if (!path) throw new Error('Skripteigenschaft PROBE_PATH fehlt.');
   Logger.log(JSON.stringify(apiGet_(path)).slice(0, 3000));
@@ -337,6 +378,7 @@ function testPfad() {
  * Feldnamen protokolliert, keine Namen.
  */
 function testKader() {
+  assertAllowed_();
   try {
     // Beendetes Spiel (Beispiel-ID 57970): Welche Ereignisse (Tore, Strafen ...) liefert der Saisonmanager?
     var d = apiGet_('games/57970'), ev = d.events || [];
@@ -351,6 +393,14 @@ function testKader() {
       Logger.log('Typ ' + k + ': ' + types[k].length + ' | Beispiel: ' + JSON.stringify(types[k][0]).slice(0, 400));
     });
   } catch (e) { Logger.log('FEHLER ' + e.message); }
+}
+
+/** Zeigt, ob die Freigabeliste aktiv ist (nur Anzahl, keine Adressen) und mit welchem Konto du gerade arbeitest. */
+function testZugriff() {
+  assertAllowed_();
+  var n = allowedList_().length;
+  Logger.log(n ? 'Freigabeliste aktiv: ' + n + ' Konto/Konten + Besitzer.' : 'Keine Freigabeliste (ALLOWED_USERS leer): alle Konten der Domain dürfen die App nutzen.');
+  Logger.log('Aktuelles Konto: ' + (currentUser_() || 'nicht lesbar') + ', freigegeben: ' + isAllowed_());
 }
 
 /** Schreibt eine Testdatei in "Exporte" (prüft die Drive-Rechte). */
