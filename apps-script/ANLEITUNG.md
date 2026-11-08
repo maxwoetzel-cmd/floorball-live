@@ -70,6 +70,10 @@ Mit der **Skripteigenschaft `ALLOWED_USERS`** lässt sich das auf bestimmte Kont
    z. B. `floorball-tablet@usvjena.de, paulina.jacob@usvjena.de`. Speichern.
 3. Im Editor die Funktion `testZugriff` ausführen. Das Protokoll zeigt, ob die Liste aktiv ist und ob dein Konto freigegeben ist.
 
+Voraussetzung: `appsscript.json` muss den Bereich `https://www.googleapis.com/auth/userinfo.email` enthalten (steht in der Datei in diesem Ordner).
+Nach dem Einfügen einmal eine Funktion im Editor ausführen und die Berechtigung bestätigen, dann neue Version bereitstellen. Ohne diesen Bereich
+ist die Adresse nicht lesbar und eine gefüllte Liste sperrt alle aus (außer dem Editor-Zugang von Max). Erst `testZugriff` prüfen, dann die Liste füllen.
+
 Verhalten:
 - **Leer oder nicht vorhanden:** alle Konten der Domain dürfen (bisheriges Verhalten).
 - **Gefüllt:** nur die Konten in der Liste **und der Besitzer des Projekts (Max)**. Alle anderen sehen beim Öffnen „Kein Zugriff“

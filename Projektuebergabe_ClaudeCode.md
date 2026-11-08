@@ -124,9 +124,10 @@ Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie 
 11. Paket 3 ist bereitgestellt (Backend 08.11.2026). Offen: Test mit zwei echten Geräten (Schuss auf Gerät 1, Wechsel auf Gerät 2, Offline-Phase, Neues Spiel).
 12. Paket 4 live schalten: `Code.gs` mit `listExports` einfügen, neue Version der bestehenden Bereitstellung (Nutzer). Danach Saison aus Drive laden und prüfen, ob doppelte Sicherungen richtig zusammengefasst werden und das Teilen-Menü in der Web-App aufgeht.
 13. Geparkt: Reihe pro Schuss (Reihenwechsel alle 40–60 s, aktuell kein Bedarf).
-14. **Freigabeliste** (08.11.2026): Code ist im Repo (`allowedList_`, `isAllowed_`, `assertAllowed_`, `testZugriff`), mit simulierten Konten getestet (sieben Fälle),
-    **noch nicht bereitgestellt**. Vorgehen: `Code.gs` einfügen, neue Version der bestehenden Bereitstellung (Nutzer, nicht am Spieltag), danach `ALLOWED_USERS`
-    setzen (Tablet-Konto und alle erfassenden Coaches nicht vergessen), `testZugriff` ausführen, mit einem nicht freigegebenen Konto prüfen („Kein Zugriff“).
+14. **Freigabeliste** (08.11.2026): **bereitgestellt (Version 9) und aktiv.** `ALLOWED_USERS` enthält floorball-tablet@, max.woetzel@, paulina.jacob@ und
+    anja.moldenhauer@usvjena.de (Besitzer Max kommt immer hinein). Voraussetzung ist der OAuth-Bereich `userinfo.email` im Manifest; ohne ihn ist die
+    Adresse nicht lesbar und eine gefüllte Liste sperrt alle aus. Geprüft: `testZugriff` zeigt Konto max.woetzel@ und freigegeben, Web-App öffnet für Max
+    mit aktiver Liste und Drive verbunden. **Offen:** Test am Tablet-Konto und mit einem nicht freigegebenen Konto („Kein Zugriff“).
 
 ---
 
