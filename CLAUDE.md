@@ -42,6 +42,7 @@ kein Framework. Neue Funktionen immer inline ergänzen.
   (`loadGames`, `pickGame`), Spielstand-Autosave nach Drive (`scheduleDriveSave`),
   Exporte direkt nach Drive (`saveFile`). Als lokale Datei sind diese Teile inaktiv.
   Gemeinsam erfassen mit mehreren Geräten (`setSyncOn`, `syncTick`, `merge3`; Backend `syncExchange`).
+  Spielbericht und Saisonauswertung als teilbare HTML-Seiten (`shareGameReport`, `renderSeason`; Backend `listExports`).
   Kader-Import aus dem Saisonmanager (`loadSmRoster`, `applySmRoster`): Backend `getRoster` liest die
   Aufstellungen der letzten 6 beendeten Spiele (`/api/v2/games/:id`, Feld `players`).
   Die Web-App lädt die App-Datei aus GitHub (`main`, raw), Rückfall: Drive-Ordner. Ein App-Update ist

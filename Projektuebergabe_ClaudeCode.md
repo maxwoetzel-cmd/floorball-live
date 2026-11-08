@@ -93,6 +93,13 @@ Verantwortlich: Max Woetzel (Head-Coach Herren).
   - Rollen (`setRole`, nur Ansicht): „Schüsse und Bullys“ blendet im Spiel die Aufstellung aus, „Wechsel“ das Schussfeld (Aufstellung immer offen).
   - Abgleich alle 4 s und 0,8 s nach jeder Änderung. Warnung nach 20 s ohne Verbindung; Erfasstes bleibt lokal und wird nachgeschickt.
   - Getestet mit zwei App-Instanzen und simuliertem Backend (gleichzeitige Einträge, Löschen gegen Ändern, Wechsel, Offline-Phase, Startseite, Drittelende, Neues Spiel). **Nicht getestet:** echtes Apps Script (Laufzeit, Sperre, Quoten), zwei echte Geräte.
+- Paket 4 (08.11.2026, **Spielbericht und Saisonauswertung**):
+  - **Spielbericht** (Knopf bei Spielende, `shareGameReport`): eigenständige HTML-Seite mit Kopf (Ergebnis, Datum, Halle), Torfolge und der Gesamtauswertung (alle `<details>` geöffnet). CSS der App plus `REPORT_CSS` (helle Farben beim Drucken, „Drucken → Als PDF“).
+  - **Teilen** (`shareHtml`): Teilen-Menü des Geräts (z. B. WhatsApp), falls erlaubt; in der Web-App zusätzlich Ablage in Drive „Exporte“. Ist das Teilen-Menü im Apps-Script-Fenster gesperrt, liegt die Datei in Drive und wird von dort geteilt.
+  - **Saisonauswertung** (Schritt 1 und Spielende, `#sec-season`): Backend `listExports` liest alle `floorball_*.json` und `spielstand_aktuell.json` aus „Exporte“ (gekürzt). Rückfall: Exportdateien selbst wählen. Nur Spiele ab 1. August der laufenden Saison mit Daten. Doppelte Sicherungen eines Spiels (Schlüssel: Saisonmanager-Spiel-ID, sonst `syncId`, sonst Gegner+Datum) → beendeter bzw. vollständigster Stand. Spiele abwählbar (`fl_season_excl` im `localStorage`).
+  - Inhalte: Überblick (Bilanz, Tore, Schüsse, Quoten, Bully, ÜZ/UZ), Balken Tore/Schüsse je Spiel, Spieltabelle mit erwarteten Toren, Spieler (Spiele, Minuten, Ø), Torhüter (Quote), Schussbilder der Saison, Torquote je Zone. Erwartete Tore = Saison-Torquote der Zone (beide Teams, zur Gesamtquote hin geglättet, Gewicht 5).
+  - Spieler über Spiele hinweg: `smId`, sonst Vor- und Nachname (Trikotnummer wechselt mit der Trikotfarbe). Vorhandene Auswertungsfunktionen laufen für fremde Spiele über `withState`.
+  - Getestet mit erfundenen Spielen im Browser (Zusammenfassen doppelter Sicherungen, Saisonfilter, Abwählen, erzeugte HTML-Seiten). **Nicht getestet:** `listExports` im echten Apps Script, Teilen-Menü auf dem Tablet.
 
 **Getestet** wurde mit simulierten Daten im Browser und mit Node (Syntax, Rechenlogik). **Nicht getestet:** echtes Spiel, echtes Tablet,
 Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie bei beendeten Spielen angenommen), Strafen live.
@@ -109,8 +116,9 @@ Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie 
 8. GitHub-Konto mit Zwei-Faktor-Anmeldung absichern (siehe Fallstricke).
 9. Prüfen, ob die Wake Lock API in der Apps-Script-Web-App (eingebettetes Fenster) auf dem Tablet erlaubt ist. Im Testbrowser wurde sie abgelehnt, dann greift nur der Hinweis.
 10. YouTube-Zeitmarken am ersten echten Spiel prüfen (Genauigkeit der Tore, Schätzung „(ca.)“ bei Strafen, Kopieren in der Web-App). Video: CapCut, Upload YouTube, Aufnahme pro Spiel, Drittelpausen teils geschnitten.
-11. Paket 3 ist bereitgestellt (Backend 08.11.2026). Offen: Test mit zwei echten Geräten (Schuss auf Gerät 1, Wechsel auf Gerät 2, Offline-Phase, Neues Spiel). Paket 4: Saisonauswertung und Spielbericht (alle dürfen alles sehen, Ablageort für Spieler offen).
-12. Geparkt: Reihe pro Schuss (Reihenwechsel alle 40–60 s, aktuell kein Bedarf).
+11. Paket 3 ist bereitgestellt (Backend 08.11.2026). Offen: Test mit zwei echten Geräten (Schuss auf Gerät 1, Wechsel auf Gerät 2, Offline-Phase, Neues Spiel).
+12. Paket 4 live schalten: `Code.gs` mit `listExports` einfügen, neue Version der bestehenden Bereitstellung (Nutzer). Danach Saison aus Drive laden und prüfen, ob doppelte Sicherungen richtig zusammengefasst werden und das Teilen-Menü in der Web-App aufgeht.
+13. Geparkt: Reihe pro Schuss (Reihenwechsel alle 40–60 s, aktuell kein Bedarf).
 
 ---
 

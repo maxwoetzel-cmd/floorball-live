@@ -6,6 +6,7 @@
  *  2. Saisonmanager abfragen – der API-Schlüssel bleibt hier geheim
  *  3. Dateien in den Drive-Ordner "Exporte" schreiben
  *  4. Gemeinsames Erfassen mit mehreren Geräten (syncExchange)
+ *  5. Spielstände für die Saisonauswertung liefern (listExports)
  *
  * WICHTIG: Der Saisonmanager-Schlüssel gehört NICHT in diesen Code, sondern in
  * Projekteinstellungen > Skripteigenschaften > SAISONMANAGER_KEY.
@@ -172,6 +173,38 @@ function readFile(name) {
     if (!newest || f.getLastUpdated() > newest.getLastUpdated()) newest = f;
   }
   return newest ? newest.getBlob().getDataAsString('UTF-8') : null;
+}
+
+/**
+ * Alle Spielstände im Ordner "Exporte" für die Saisonauswertung (Exporte floorball_*.json und
+ * spielstand_aktuell.json). Gekürzt auf das, was die Auswertung braucht. Doppelte Sicherungen
+ * desselben Spiels fasst die App zusammen.
+ */
+function listExports() {
+  var it = DriveApp.getFolderById(CONFIG.EXPORT_FOLDER_ID).getFiles(), out = [];
+  while (it.hasNext()) {
+    var f = it.next(), n = f.getName();
+    if (!(/^floorball_.*\.json$/i.test(n) || n === 'spielstand_aktuell.json') || n === 'floorball_test.json') continue;
+    try {
+      var p = JSON.parse(f.getBlob().getDataAsString('UTF-8')), s = (p && p.state) || p;
+      if (!s || !Array.isArray(s.shots)) continue;
+      out.push({
+        name: n, updated: f.getLastUpdated().getTime(), exportedAt: p.exportedAt || '',
+        state: {
+          game: s.game || null, teamUs: s.teamUs || '', teamOpp: s.teamOpp || '', phase: s.phase || '', period: s.period || '',
+          syncId: s.syncId || '', periodStarts: s.periodStarts || null,
+          shots: s.shots.map(function (x) {
+            return { id: x.id, period: x.period, team: x.team, zone: x.zone, outcome: x.outcome, minute: x.minute, ts: x.ts, goalieId: x.goalieId, emptyNet: !!x.emptyNet };
+          }),
+          bullies: s.bullies || [], specials: s.specials || [],
+          roster: (s.roster || []).map(function (r) {
+            return { id: r.id, nr: r.nr, name: r.name, first: r.first, last: r.last, smId: r.smId, isGoalie: !!r.isGoalie, present: !!r.present, events: r.events || [] };
+          })
+        }
+      });
+    } catch (e) { /* unlesbare Datei überspringen */ }
+  }
+  return out;
 }
 
 /* ---------- Gemeinsam erfassen (mehrere Geräte) ----------

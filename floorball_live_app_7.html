@@ -246,6 +246,9 @@
 <section id="sec-summary" data-ph="break end">
   <h2 id="summary-title">Auswertung</h2>
   <div id="summary-body"></div>
+  <div class="row" id="report-actions" style="display:none; margin-top:12px;">
+    <button type="button" class="primary" onclick="shareGameReport()" style="flex:1;">Spielbericht teilen / speichern</button>
+  </div>
 </section>
 
 <section id="sec-video" data-ph="end">
@@ -476,6 +479,21 @@
   <input type="file" id="import-file" accept="application/json,.json" style="display:none;" onchange="importData(event)">
   <div class="row" style="margin-top:10px;">
     <button type="button" id="new-game-btn" onclick="newGame(this)" style="flex:1;">Neues Spiel</button>
+  </div>
+</section>
+
+<section id="sec-season" data-ph="prep end" data-step="1">
+  <h2>Saisonauswertung</h2>
+  <p class="muted" style="margin:0 0 8px;">Alle Spiele dieser Saison (ab 1. August) aus den Exporten. Mehrfach gesicherte Spiele werden zusammengefasst, Testspiele lassen sich abwählen.</p>
+  <div class="row">
+    <button type="button" class="web-only primary" onclick="loadSeason()" style="flex:1;">Saison aus Drive laden</button>
+    <button type="button" onclick="document.getElementById('season-files').click()" style="flex:1;">Exportdateien wählen</button>
+  </div>
+  <input type="file" id="season-files" accept="application/json,.json" multiple style="display:none;" onchange="seasonFromFiles(event)">
+  <div id="season-games" style="margin-top:8px;"></div>
+  <div id="season-body"></div>
+  <div class="row" id="season-actions" style="display:none; margin-top:12px;">
+    <button type="button" class="primary" onclick="shareSeasonReport()" style="flex:1;">Saisonauswertung teilen / speichern</button>
   </div>
 </section>
 
@@ -904,6 +922,7 @@ function renderSummary(){
   if(ph==='break'){ti.textContent=state.period+' – Auswertung'; el.innerHTML=summaryHtml(state.period);}
   else if(ph==='end'){ti.textContent='Gesamtauswertung'; el.innerHTML=summaryHtml(null);}
   else el.innerHTML='';
+  var ra=document.getElementById('report-actions'); if(ra) ra.style.display=(ph==='end')?'flex':'none';
 }
 /* ---------- Über-/Unterzahl aus den Strafen des Saisonmanagers ---------- */
 function smTime(t){var m=/^(\d+):(\d{2})$/.exec(String(t||'')); return m?parseInt(m[1],10)*60+parseInt(m[2],10):0;}
@@ -1627,6 +1646,212 @@ function saveVideoText(){
   if(!txt){showToast('Noch kein Text – erst Videozeiten eintragen'); return;}
   var opp=(state.teamOpp||'gegner').replace(/[^a-zA-Z0-9]/g,'_');
   saveFile(new Blob([txt],{type:'text/plain;charset=utf-8'}),'youtube_zeitmarken_'+opp+'.txt').then(function(ok){if(ok) showToast('Zeitmarken gespeichert');});
+}
+
+/* ---------- Spielbericht und Saisonauswertung (eigenständige HTML-Seiten zum Teilen) ---------- */
+// Vorhandene Auswertungsfunktionen arbeiten mit dem globalen state; für andere Spiele kurz austauschen
+function withState(s,fn){var old=state; state=s; try{return fn();} finally{state=old;}}
+function isoDate(ms){var d=new Date(ms); return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);}
+function firstTs(s){
+  var t=null, ps=s.periodStarts||{};
+  Object.keys(ps).forEach(function(k){if(ps[k]&&(!t||ps[k]<t)) t=ps[k];});
+  (s.shots||[]).concat(s.bullies||[]).forEach(function(e){if(e.ts&&(!t||e.ts<t)) t=e.ts;});
+  return t;
+}
+function gameDateOf(s){if(s.game&&s.game.date) return s.game.date; var t=firstTs(s); return t?isoDate(t):'';}
+function fileSafe(s){return String(s||'').replace(/[^a-zA-Z0-9äöüÄÖÜß]+/g,'_').replace(/^_+|_+$/g,'')||'x';}
+var REPORT_CSS='body.report{max-width:920px; margin:0 auto; padding:16px;} body.report section{display:block;}'+
+  '.rp-score{font-size:24px; font-weight:700; margin:4px 0;} .rp-kpis{display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; margin:8px 0;}'+
+  '.rp-kpi{background:var(--panel-alt); border-radius:8px; padding:8px 10px;} .rp-kpi b{display:block; font-size:20px;} .rp-kpi span{font-size:12px; color:var(--text-muted);}'+
+  '.rp-chart{width:100%; height:auto; display:block; margin:6px 0 2px;} .rp-scroll{overflow-x:auto;}'+
+  '@media print{:root{--bg:#fff; --panel:#fff; --panel-alt:#eef1f3; --border:#c9d1d6; --text:#111; --text-secondary:#333; --text-muted:#555;}'+
+  ' body.report{padding:0;} section{break-inside:avoid;} svg,.duel-bar,.qbar,.rp-kpi{-webkit-print-color-adjust:exact; print-color-adjust:exact;}}';
+function reportPage(title,inner){
+  var css=(document.querySelector('style')||{}).textContent||'';
+  return '<!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>'+esc(title)+'</title><style>'+css+REPORT_CSS+'</style></head>'+
+    '<body class="report">'+inner+'<p class="muted" style="margin-top:16px;">Erstellt mit Floorball Live am '+esc(new Date().toLocaleString('de-DE'))+'. Zum Speichern als PDF: Drucken → Als PDF speichern.</p></body></html>';
+}
+// Teilen-Menü (z. B. WhatsApp), wenn das Gerät es erlaubt; in der Web-App zusätzlich Ablage in Drive
+function shareHtml(html,name){
+  var blob=new Blob([html],{type:'text/html'}), shared=false;
+  try{
+    var file=new File([blob],name,{type:'text/html'});
+    if(navigator.canShare&&navigator.share&&navigator.canShare({files:[file]})){
+      shared=true;
+      navigator.share({files:[file], title:name}).catch(function(err){if(err&&err.name==='AbortError') return; if(!inWebApp()) saveFile(blob,name);});
+    }
+  }catch(e){shared=false;}
+  if(inWebApp()) saveFile(blob,name).then(function(){if(!shared) showToast('In Drive gespeichert ('+name+'). Teilen von dort aus.');});
+  else if(!shared) saveFile(blob,name);
+}
+function goalTimelineHtml(s){
+  var sc={Wir:0,Gegner:0};
+  var rows=s.shots.filter(function(x){return x.outcome==='Tor';}).slice().sort(function(a,b){
+    return (PERIODS.indexOf(a.period)-PERIODS.indexOf(b.period))||((a.minute||0)-(b.minute||0))||((a.ts||a.id)-(b.ts||b.id));
+  }).map(function(x){
+    sc[x.team]++;
+    return '<tr><td>'+esc(x.period)+'</td><td>'+(x.minute==null?'':x.minute)+'</td><td>'+(x.team==='Wir'?'Tor '+esc(s.teamUs||'Wir'):'Gegentor')+(x.emptyNet?' (Empty Net)':'')+'</td><td>'+sc.Wir+':'+sc.Gegner+'</td><td>'+esc(zoneLabel(x.zone))+'</td></tr>';
+  }).join('');
+  return '<table><tr><th>Drittel</th><th>Min</th><th>Ereignis</th><th>Stand</th><th>Zone</th></tr>'+(rows||'<tr><td colspan="5" class="muted">Keine Tore.</td></tr>')+'</table>';
+}
+function gameReportHtml(){
+  var g=state.game, sc=computeScore();
+  var info=g?(fmtDate(g.date)+(g.time?' '+g.time:'')+(g.arena?' · '+g.arena:'')+(g.isHome!=null?(g.isHome?' · Heimspiel':' · Auswärtsspiel'):'')):fmtDate(gameDateOf(state));
+  return '<section><h1 style="margin:0;">Spielbericht</h1><div class="rp-score">'+esc(usName())+' '+sc.Wir+' : '+sc.Gegner+' '+esc(oppName())+'</div><p class="muted" style="margin:0;">'+esc(info)+'</p></section>'+
+    '<section><h2>Torfolge</h2>'+goalTimelineHtml(state)+'</section>'+
+    '<section><h2>Gesamtauswertung</h2>'+summaryHtml(null).replace(/<details /g,'<details open ')+'</section>';
+}
+function shareGameReport(){
+  if(!hasGameData()){showToast('Noch keine Spieldaten'); return;}
+  shareHtml(reportPage('Spielbericht '+usName()+' – '+oppName(), gameReportHtml()), 'spielbericht_'+(gameDateOf(state)||'spiel')+'_'+fileSafe(oppName())+'.html');
+}
+
+/* Saisonauswertung: Spielstände aus Drive (listExports) oder ausgewählten Dateien */
+var seasonEntries=[];
+function seasonExcl(){try{return JSON.parse(localStorage.getItem('fl_season_excl')||'[]');}catch(e){return [];}}
+function setSeasonIncl(key,on){
+  var ex=seasonExcl().filter(function(k){return k!==key;}); if(!on) ex.push(key);
+  try{localStorage.setItem('fl_season_excl',JSON.stringify(ex));}catch(e){}
+  renderSeason();
+}
+function loadSeason(){
+  showToast('Lade Exporte aus Drive …');
+  gsRun('listExports',[]).then(function(list){seasonEntries=list||[]; renderSeason(); showToast(seasonEntries.length+' Dateien gelesen');})
+    .catch(function(e){showToast('Drive: '+e.message);});
+}
+function seasonFromFiles(ev){
+  var files=[].slice.call(ev.target.files||[]); ev.target.value='';
+  Promise.all(files.map(function(f){return f.text().then(function(t){
+    try{var p=JSON.parse(t); return {name:f.name, updated:f.lastModified, exportedAt:p.exportedAt||'', state:p.state||p};}catch(e){return null;}
+  });})).then(function(list){seasonEntries=seasonEntries.concat(list.filter(Boolean)); renderSeason();});
+}
+function seasonStartIso(){var d=new Date(), y=d.getMonth()>=7?d.getFullYear():d.getFullYear()-1; return y+'-08-01';}
+function gameDataSize(s){return s.shots.length+s.bullies.length+s.specials.length+s.roster.reduce(function(a,p){return a+(p.events||[]).length;},0);}
+function seasonGames(){
+  var by={}, start=seasonStartIso();
+  seasonEntries.forEach(function(e){
+    var s=e.state; if(!s||!Array.isArray(s.shots)) return;
+    ['bullies','specials','roster'].forEach(function(k){if(!Array.isArray(s[k])) s[k]=[];});
+    s.roster.forEach(function(p){if(!Array.isArray(p.events)) p.events=[];});
+    if(!gameDataSize(s)) return;
+    var date=gameDateOf(s)||String(e.exportedAt||'').slice(0,10);
+    if(date&&date<start) return;
+    var key=s.game&&s.game.id?'g'+s.game.id:(s.syncId?'s'+s.syncId:'o'+normName(s.teamOpp)+'|'+date);
+    var rank=function(x){return [x.state.phase==='end'?1:0, gameDataSize(x.state), x.updated||0];};
+    var cur=by[key];
+    if(cur){var a=rank(e), b=rank(cur); if(a[0]<b[0]||(a[0]===b[0]&&(a[1]<b[1]||(a[1]===b[1]&&a[2]<=b[2])))) return;}
+    by[key]=e; e.key=key; e.date=date;
+  });
+  return Object.keys(by).map(function(k){return by[k];}).sort(function(a,b){return a.date<b.date?-1:(a.date>b.date?1:0);});
+}
+function sTotals(s){
+  var t=teamTotals(s.shots), b=s.bullies, bw=b.filter(function(x){return x.won;}).length;
+  var pp=s.specials.filter(function(x){return x.type==='Überzahl';}), pk=s.specials.filter(function(x){return x.type==='Unterzahl';});
+  return {t:t, bw:bw, bn:b.length, ppN:pp.length, ppG:pp.reduce(function(a,x){return a+(x.goalsFor||0);},0), ppOk:pp.filter(function(x){return x.success===true;}).length,
+    pkN:pk.length, pkGA:pk.reduce(function(a,x){return a+(x.goalsAgainst||0);},0), pkOk:pk.filter(function(x){return x.success===true;}).length};
+}
+function pctTxt(n,d){return d?Math.round(n/d*100)+'%':'–';}
+function playerKeyOf(p){if(p.smId) return 'sm'+p.smId; return 'n'+normName(((p.first||'')+' '+(p.last||'')).trim()||p.name);}
+function playerSeasonName(p){return p.first?(p.first+(p.last?' '+p.last.charAt(0)+'.':'')):(p.name||'Spieler');}
+// Balkendiagramm je Spiel: zwei Werte (wir/gegen) nebeneinander
+function seasonBarsSvg(games,valA,valB,title){
+  var n=games.length, bw=14, gap=14, w=Math.max(320,n*(2*bw+gap)+40), hgt=150, base=120;
+  var max=Math.max(1,Math.max.apply(null,games.map(function(g){return Math.max(valA(g),valB(g));})));
+  var parts=['<text x="4" y="12" font-size="11" style="fill:var(--text-muted)">'+esc(title)+'</text>',
+    '<rect x="'+(w-118)+'" y="4" width="9" height="9" fill="'+teamColor.Wir+'"/><text x="'+(w-105)+'" y="12" font-size="10" style="fill:var(--text-muted)">wir</text>',
+    '<rect x="'+(w-75)+'" y="4" width="9" height="9" fill="'+teamColor.Gegner+'"/><text x="'+(w-62)+'" y="12" font-size="10" style="fill:var(--text-muted)">Gegner</text>'];
+  games.forEach(function(g,i){
+    var x=30+i*(2*bw+gap), a=valA(g), b=valB(g), ha=Math.round(a/max*95), hb=Math.round(b/max*95);
+    parts.push('<rect x="'+x+'" y="'+(base-ha)+'" width="'+bw+'" height="'+ha+'" fill="'+teamColor.Wir+'"/><rect x="'+(x+bw)+'" y="'+(base-hb)+'" width="'+bw+'" height="'+hb+'" fill="'+teamColor.Gegner+'"/>');
+    parts.push('<text x="'+(x+bw)+'" y="'+(base-Math.max(ha,hb)-3)+'" font-size="9" text-anchor="middle" style="fill:var(--text-secondary)">'+a+':'+b+'</text>');
+    parts.push('<text x="'+(x+bw)+'" y="'+(base+13)+'" font-size="9" text-anchor="middle" style="fill:var(--text-muted)">'+esc(fmtDate(g.date).slice(0,6))+'</text>');
+    parts.push('<text x="'+(x+bw)+'" y="'+(base+25)+'" font-size="9" text-anchor="middle" style="fill:var(--text-muted)">'+esc(String(g.state.teamOpp||'').slice(0,8))+'</text>');
+  });
+  parts.push('<line x1="26" y1="'+base+'" x2="'+(w-4)+'" y2="'+base+'" style="stroke:var(--border)"/>');
+  return '<div class="rp-scroll"><svg class="rp-chart" style="min-width:'+w+'px; max-width:'+Math.round(w*1.3)+'px;" viewBox="0 0 '+w+' '+hgt+'" xmlns="http://www.w3.org/2000/svg">'+parts.join('')+'</svg></div>';
+}
+function seasonReportHtml(games){
+  var us=(games[0]&&games[0].state.teamUs)||usName(), all=[], win=0, draw=0, loss=0, sum={gf:0,ga:0,sf:0,sa:0,af:0,aa:0,bw:0,bn:0,ppN:0,ppG:0,ppOk:0,pkN:0,pkGA:0,pkOk:0};
+  games.forEach(function(g){
+    var s=g.state, x=sTotals(s); g.tot=x;
+    s.shots.forEach(function(sh){all.push(sh);});
+    if(x.t.Wir.g>x.t.Gegner.g) win++; else if(x.t.Wir.g<x.t.Gegner.g) loss++; else draw++;
+    sum.gf+=x.t.Wir.g; sum.ga+=x.t.Gegner.g; sum.sf+=x.t.Wir.s; sum.sa+=x.t.Gegner.s; sum.af+=x.t.Wir.a; sum.aa+=x.t.Gegner.a;
+    ['bw','bn','ppN','ppG','ppOk','pkN','pkGA','pkOk'].forEach(function(k){sum[k]+=x[k];});
+  });
+  // Torquote je Zone (beide Teams) als Grundlage für erwartete Tore; kleine Stichproben zur Gesamtquote hin geglättet
+  var zr={}, totS=all.length, totG=all.filter(function(x){return x.outcome==='Tor';}).length, R=totS?totG/totS:0;
+  all.forEach(function(x){var z=zr[x.zone]||(zr[x.zone]={n:0,g:0}); z.n++; if(x.outcome==='Tor') z.g++;});
+  function xg(shots){return shots.reduce(function(a,x){var z=zr[x.zone]||{n:0,g:0}; return a+(z.g+5*R)/(z.n+5);},0);}
+  var h='<h3>Überblick</h3><div class="rp-kpis">'+
+    [['Spiele',games.length],['Siege · Remis · Niederlagen',win+' · '+draw+' · '+loss],['Tore',sum.gf+' : '+sum.ga],['Schüsse',sum.sf+' : '+sum.sa],
+     ['Schussquote',pctTxt(sum.gf,sum.sf)],['Fangquote',pctTxt(sum.aa-sum.ga,sum.aa)],['Bully',pctTxt(sum.bw,sum.bn)],
+     ['Überzahl (Tore/Anzahl)',sum.ppG+' / '+sum.ppN],['Unterzahl ohne Gegentor',pctTxt(sum.pkOk,sum.pkN)]].map(function(k){return '<div class="rp-kpi"><b>'+esc(k[1])+'</b><span>'+esc(k[0])+'</span></div>';}).join('')+'</div>';
+  h+='<h3 style="margin-top:14px;">Spiele</h3>'+seasonBarsSvg(games,function(g){return g.tot.t.Wir.g;},function(g){return g.tot.t.Gegner.g;},'Tore je Spiel')+
+    seasonBarsSvg(games,function(g){return g.tot.t.Wir.s;},function(g){return g.tot.t.Gegner.s;},'Schüsse je Spiel');
+  h+='<div class="rp-scroll"><table><tr><th>Datum</th><th>Gegner</th><th>Ergebnis</th><th>Schüsse</th><th>aufs Tor</th><th>Schussquote</th><th>Erw. Tore</th><th>Bully</th><th>ÜZ</th><th>UZ</th></tr>'+
+    games.map(function(g){var x=g.tot, s=g.state;
+      return '<tr><td>'+esc(fmtDate(g.date))+'</td><td>'+esc(s.teamOpp||'')+(s.phase!=='end'?' <span class="muted">(nicht beendet)</span>':'')+'</td><td>'+x.t.Wir.g+':'+x.t.Gegner.g+'</td><td>'+x.t.Wir.s+':'+x.t.Gegner.s+'</td><td>'+x.t.Wir.a+':'+x.t.Gegner.a+'</td>'+
+        '<td>'+pctTxt(x.t.Wir.g,x.t.Wir.s)+'</td><td>'+xg(s.shots.filter(function(q){return q.team==='Wir';})).toFixed(1)+':'+xg(s.shots.filter(function(q){return q.team==='Gegner';})).toFixed(1)+'</td>'+
+        '<td>'+pctTxt(x.bw,x.bn)+'</td><td>'+x.ppG+'/'+x.ppN+'</td><td>'+x.pkGA+'/'+x.pkN+'</td></tr>';}).join('')+
+    '</table></div><p class="muted" style="margin:6px 0 0;">ÜZ = Tore/Überzahlsituationen, UZ = Gegentore/Unterzahlsituationen. Erwartete Tore: Summe der Saison-Torquoten der Zonen, aus denen geschossen wurde (Wir : Gegner).</p>';
+  // Spieler: Einsätze und Spielzeit
+  var pl={};
+  games.forEach(function(g){
+    var s=g.state;
+    withState(Object.assign({},s,{period:'__keins'}),function(){
+      s.roster.forEach(function(p){
+        var min=computePlayerMinutes(p); if(!(min>0||p.present)) return;
+        var k=playerKeyOf(p), q=pl[k]||(pl[k]={name:playerSeasonName(p), nr:p.nr, goalie:false, games:0, min:0});
+        q.games++; q.min+=min; q.nr=p.nr||q.nr; if(p.isGoalie) q.goalie=true;
+      });
+    });
+  });
+  var plist=Object.keys(pl).map(function(k){return pl[k];}).sort(function(a,b){return (a.goalie===b.goalie?0:(a.goalie?-1:1))||b.min-a.min;});
+  h+='<h3 style="margin-top:14px;">Spieler</h3><table><tr><th>Nr</th><th>Name</th><th>Spiele</th><th>Min gesamt</th><th>Ø Min</th></tr>'+
+    (plist.map(function(p){return '<tr><td>'+esc(p.nr||'')+'</td><td>'+esc(p.name)+(p.goalie?' (T)':'')+'</td><td>'+p.games+'</td><td>'+Math.round(p.min)+'</td><td>'+(p.games?Math.round(p.min/p.games):0)+'</td></tr>';}).join('')||'<tr><td colspan="5" class="muted">Keine Einsätze erfasst.</td></tr>')+'</table>';
+  // Torhüter
+  var gk={};
+  games.forEach(function(g){
+    var s=g.state, seen={};
+    s.shots.forEach(function(sh){
+      if(sh.team!=='Gegner'||sh.emptyNet||sh.goalieId==null||(sh.outcome!=='Tor'&&sh.outcome!=='Aufs Tor')) return;
+      var p=s.roster.find(function(r){return r.id===sh.goalieId;}); if(!p) return;
+      var k=playerKeyOf(p), q=gk[k]||(gk[k]={name:playerSeasonName(p), games:0, saves:0, goals:0});
+      if(!seen[k]){seen[k]=1; q.games++;}
+      if(sh.outcome==='Tor') q.goals++; else q.saves++;
+    });
+  });
+  var glist=Object.keys(gk).map(function(k){return gk[k];});
+  h+='<h3 style="margin-top:14px;">Torhüter</h3><table><tr><th>Torhüter</th><th>Spiele</th><th>Gehalten</th><th>Gegentore</th><th>Quote</th></tr>'+
+    (glist.map(function(q){return '<tr><td>'+esc(q.name)+'</td><td>'+q.games+'</td><td>'+q.saves+'</td><td>'+q.goals+'</td><td>'+quoteCellHtml(q.saves,q.saves+q.goals)+'</td></tr>';}).join('')||'<tr><td colspan="5" class="muted">Keine Schüsse aufs Tor mit Torhüter.</td></tr>')+'</table>';
+  // Zonen und Chancen
+  h+='<h3 style="margin-top:14px;">Schussbilder der Saison</h3>'+withState({teamUs:us, teamOpp:'Gegner', roster:[]},function(){return fieldsHtml(all);});
+  var zones=[];
+  ZONE_ROWS_OFF.forEach(function(r){ZONE_COLS.forEach(function(c){zones.push(r.key+'-'+c.key);});});
+  function zc(team,z){var l=all.filter(function(x){return x.team===team&&x.zone===z;}), g=l.filter(function(x){return x.outcome==='Tor';}).length; return '<td>'+l.length+'</td><td>'+g+'</td><td>'+pctTxt(g,l.length)+'</td>';}
+  h+='<h3 style="margin-top:14px;">Torquote je Zone</h3><div class="rp-scroll"><table><tr><th>Zone</th><th>Schüsse wir</th><th>Tore</th><th>Quote</th><th>Schüsse Gegner</th><th>Tore</th><th>Quote</th></tr>'+
+    zones.map(function(z){return '<tr><td>'+esc(zoneLabel(z))+'</td>'+zc('Wir',z)+zc('Gegner',z)+'</tr>';}).join('')+'</table></div>';
+  return h;
+}
+function renderSeason(){
+  var box=document.getElementById('season-games'), body=document.getElementById('season-body'), act=document.getElementById('season-actions'); if(!box) return;
+  var games=seasonGames(), ex=seasonExcl();
+  if(!games.length){box.innerHTML=seasonEntries.length?'<p class="muted">Keine Spiele dieser Saison mit erfassten Daten gefunden.</p>':''; body.innerHTML=''; act.style.display='none'; return;}
+  box.innerHTML='<details><summary style="cursor:pointer; padding:6px 0; color:var(--text-secondary);">'+games.length+' Spiele gefunden – Auswahl</summary>'+
+    games.map(function(g){var t=teamTotals(g.state.shots), on=ex.indexOf(g.key)===-1;
+      return '<label style="display:flex; gap:8px; align-items:center; padding:6px 0; border-top:1px solid var(--border);"><input type="checkbox" style="width:auto; min-height:0;" data-k="'+esc(g.key)+'"'+(on?' checked':'')+' onchange="setSeasonIncl(this.dataset.k,this.checked)">'+
+        '<span>'+esc(fmtDate(g.date))+' · '+esc(g.state.teamOpp||'?')+' · '+t.Wir.g+':'+t.Gegner.g+(g.state.phase!=='end'?' · nicht beendet':'')+'</span></label>';}).join('')+'</details>';
+  var inc=games.filter(function(g){return ex.indexOf(g.key)===-1;});
+  body.innerHTML=inc.length?seasonReportHtml(inc):'<p class="muted">Kein Spiel ausgewählt.</p>';
+  act.style.display=inc.length?'flex':'none';
+}
+function shareSeasonReport(){
+  var games=seasonGames(), ex=seasonExcl(), inc=games.filter(function(g){return ex.indexOf(g.key)===-1;});
+  if(!inc.length){showToast('Kein Spiel ausgewählt'); return;}
+  var y=seasonStartIso().slice(0,4), title='Saisonauswertung '+y+'/'+String(+y+1).slice(-2);
+  shareHtml(reportPage(title,'<section><h1 style="margin:0;">'+esc(title)+'</h1><p class="muted" style="margin:4px 0 0;">'+esc((inc[0].state.teamUs||usName())+' · '+inc.length+' Spiele bis '+fmtDate(inc[inc.length-1].date))+'</p></section><section>'+seasonReportHtml(inc)+'</section>'),
+    'saisonauswertung_'+y+'_stand_'+isoDate(Date.now())+'.html');
 }
 
 /* ---------- Gemeinsam erfassen (mehrere Geräte, nur Web-App) ----------
@@ -2476,6 +2701,7 @@ if(inWebApp()){
   document.getElementById('manual-special').open=false; // manuelle Erfassung nur noch als Notfall
 }
 renderGameInfo();
+(function(){var st=document.createElement('style'); st.textContent=REPORT_CSS; document.head.appendChild(st);})(); // Saison-Ansicht in der App
 </script>
 </body>
 </html>

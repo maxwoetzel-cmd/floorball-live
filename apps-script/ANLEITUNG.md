@@ -56,6 +56,11 @@ Speicher: Versionsnummer in der Skripteigenschaft `SYNC_VERSION` (legt das Skrip
 Inhalt in `Exporte/sync_spiel.json`. Beide nicht von Hand ändern. Es darf nur **eine** Datei
 `sync_spiel.json` geben.
 
+## Saisonauswertung
+Ab Backend-Stand mit `listExports` (08.11.2026) lädt „Saison aus Drive laden“ alle Exporte aus dem
+Ordner „Exporte“. Auch dafür ist einmal eine **neue Version der bestehenden Bereitstellung** nötig.
+Ohne sie meldet der Knopf einen Fehler; die Auswahl von Exportdateien funktioniert trotzdem.
+
 ## Bekannte Grenzen (nicht getestet)
 - Die App braucht beim Laden Internet. Ohne Netz startet sie nicht.
 - Im Apps-Script-Fenster kann der Browserspeicher (`localStorage`) anders reagieren als bei der
