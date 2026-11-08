@@ -80,6 +80,10 @@ Verantwortlich: Max Woetzel (Head-Coach Herren).
   - **Drive-Autosave mit Wiederholung** (`runDriveSave`, `updateDriveStatus`): Bei Fehlern neuer Versuch nach 10/20/30 … max. 60 s, rote Warnung nach 2 Minuten ohne Sicherung, sofortige Sicherung beim Wechsel in den Hintergrund und bei wiederkehrender Verbindung.
   - **Ereignisliste** (`#sec-events`, `renderEvents`): Schüsse und Bullys, neueste oben, Minute und Ergebnis änderbar, Löschen mit Rückfrage. Im Drittel eingeklappt („korrigieren ▾“), Filter aktuelles Drittel/alle. Zone ist nicht änderbar (löschen und neu erfassen).
   - **Uhrzeit-Stempel** `ts` (ms) an Schüssen, Bullys und manuellen Specials sowie `state.periodStarts`/`state.periodEnds` je Drittel (Grundlage für Paket 2: YouTube-Zeitmarken). Schuss-CSV hat die Spalte „Uhrzeit“.
+- Paket 2 (08.11.2026, **YouTube-Zeitmarken**, Abschnitt `#sec-video`, nur bei Spielende): Videozeit des Anpfiffs je Drittel eintragen (`state.videoOffsets`, Sekunden),
+  Vorlauf einstellbar (`state.videoLead`, Standard 10 s). `videoMarks` erzeugt: „0:00 Vor dem Spiel“ (für YouTube-Kapitel), Drittelbeginn, Tore mit laufendem Spielstand,
+  Gegentore, Über-/Unterzahl. Strafen aus dem Saisonmanager haben nur Spielzeit (`startSec`); ihre Uhrzeit schätzt `gameSecToTs` linear aus den erfassten
+  Ereignissen des Drittels, Kennzeichnung „(ca.)“. Text kopieren (Zwischenablage, Rückfall: markieren) oder als .txt speichern (Web-App: Drive).
 
 **Getestet** wurde mit simulierten Daten im Browser und mit Node (Syntax, Rechenlogik). **Nicht getestet:** echtes Spiel, echtes Tablet,
 Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie bei beendeten Spielen angenommen), Strafen live.
@@ -95,7 +99,7 @@ Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie 
 7. Optional: Zusammenfassung als Datei (PDF/HTML) in Drive ablegen.
 8. GitHub-Konto mit Zwei-Faktor-Anmeldung absichern (siehe Fallstricke).
 9. Prüfen, ob die Wake Lock API in der Apps-Script-Web-App (eingebettetes Fenster) auf dem Tablet erlaubt ist. Im Testbrowser wurde sie abgelehnt, dann greift nur der Hinweis.
-10. Paket 2: YouTube-Zeitmarken (Videozeit je Drittelanpfiff eintragen → Text für die Beschreibung mit Drittelbeginn, Toren, Gegentoren, Strafen; Marke einige Sekunden vor dem Ereignis). Daten: `ts`, `periodStarts`. Video: CapCut, Upload YouTube, Aufnahme pro Spiel, Drittelpausen teils geschnitten.
+10. YouTube-Zeitmarken am ersten echten Spiel prüfen (Genauigkeit der Tore, Schätzung „(ca.)“ bei Strafen, Kopieren in der Web-App). Video: CapCut, Upload YouTube, Aufnahme pro Spiel, Drittelpausen teils geschnitten.
 11. Paket 3: Paralleles Erfassen mit zwei Geräten (ereignisbasierter Abgleich im Backend, Rollen Schüsse/Bullys bzw. Wechsel nur als Voreinstellung). Paket 4: Saisonauswertung und Spielbericht (alle dürfen alles sehen, Ablageort für Spieler offen).
 12. Geparkt: Reihe pro Schuss (Reihenwechsel alle 40–60 s, aktuell kein Bedarf).
 

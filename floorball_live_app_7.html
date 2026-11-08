@@ -242,6 +242,22 @@
   <div id="summary-body"></div>
 </section>
 
+<section id="sec-video" data-ph="end">
+  <h2>Video-Zeitmarken für YouTube</h2>
+  <p class="muted" style="margin:0 0 8px;">Nach dem Upload je Drittel eintragen, bei welcher Videozeit der Anpfiff liegt (z. B. 4:12 oder 1:02:30). Geschnittene Drittelpausen sind kein Problem. Wird innerhalb eines Drittels geschnitten, verschieben sich die Marken dieses Drittels.</p>
+  <div id="video-offsets"></div>
+  <div class="row" style="margin-top:8px; align-items:center;">
+    <label class="muted" for="video-lead" style="flex:1;">Vorlauf: Marke so viele Sekunden vor dem Ereignis</label>
+    <input type="number" id="video-lead" min="0" max="60" step="1" inputmode="numeric" style="width:80px; flex:0 0 auto;" onchange="setVideoLead(this.value)">
+  </div>
+  <textarea id="video-text" readonly style="margin-top:10px; min-height:180px; font-family:monospace;"></textarea>
+  <p class="muted" id="video-info" style="margin:6px 0 0;"></p>
+  <div class="row" style="margin-top:8px;">
+    <button type="button" class="primary" onclick="copyVideoText()" style="flex:1;">Text kopieren</button>
+    <button type="button" onclick="saveVideoText()" style="flex:1;">Als Textdatei speichern</button>
+  </div>
+</section>
+
 <section id="sec-game" data-ph="prep" data-step="1">
   <h2>Spiel</h2>
   <div class="row" style="margin-bottom:10px;">
@@ -911,7 +927,7 @@ function deriveSpecials(events,side){
     expireUntil(length); if(cur){cur.end=length; out.push(cur);}
   });
   return out.filter(function(g){return g.end-g.start>0;}).map(function(g){
-    return {type:g.type, period:g.period, minute:Math.floor(g.start/60), dur:g.end-g.start,
+    return {type:g.type, period:g.period, minute:Math.floor(g.start/60), startSec:g.start, dur:g.end-g.start,
       success:g.type==='Überzahl'?g.gf>0:g.ga===0, goalsFor:g.gf, goalsAgainst:g.ga, src:'sm'};
   });
 }
@@ -929,7 +945,7 @@ function importSmSpecials(silent){
     // Saisonmanager ist maßgeblich: manuelle Eingaben werden ersetzt, damit nichts doppelt zählt
     state.specials=[];
     segs.forEach(function(g){g.id=state.nextSpecialId++; state.specials.push(g);});
-    save(); renderSpecials(); renderSummary();
+    save(); renderSpecials(); renderSummary(); renderVideo();
     if(!silent) showToast(segs.length+' Über-/Unterzahl aus dem Saisonmanager');
     return segs.length;
   }).catch(function(e){if(!silent) showToast('Saisonmanager: '+e.message); return 0;});
@@ -1469,7 +1485,7 @@ function renderEvents(){
 }
 function evFind(kind,id){return (kind==='shot'?state.shots:state.bullies).find(function(x){return x.id===id;});}
 function evChanged(kind){
-  save(); renderEvents();
+  save(); renderEvents(); renderVideo();
   if(kind==='shot'){renderShots(); renderStats(); renderPlaytimes(); updateTopbar(); renderSummary();}
   else{renderBullies(); renderSummary();}
 }
@@ -1487,6 +1503,105 @@ function deleteEvent(kind,id){
   if(kind==='shot') state.shots=state.shots.filter(function(x){return x.id!==id;});
   else state.bullies=state.bullies.filter(function(x){return x.id!==id;});
   evChanged(kind); showToast('Gelöscht: '+label);
+}
+
+/* ---------- Video-Zeitmarken für YouTube ----------
+   Videozeit eines Ereignisses = Videozeit des Drittelanpfiffs + (Uhrzeit Ereignis − Uhrzeit Anpfiff) − Vorlauf.
+   Strafen aus dem Saisonmanager haben nur eine Spielzeit; ihre Uhrzeit wird aus den erfassten Ereignissen
+   des Drittels geschätzt (Spielminute ↔ Uhrzeit, linear dazwischen) und mit „(ca.)“ markiert. */
+function parseVideoTime(v){
+  v=String(v||'').trim(); if(!v) return null;
+  if(/^\d+$/.test(v)) return parseInt(v,10)*60; // reine Zahl = Minuten
+  var p=v.split(':'); if(p.length<2||p.length>3||p.some(function(x){return !/^\d+$/.test(x);})) return null;
+  return p.reduce(function(a,x){return a*60+parseInt(x,10);},0);
+}
+function fmtVideoTime(sec){
+  sec=Math.max(0,Math.round(sec)); var h=Math.floor(sec/3600), m=Math.floor(sec%3600/60), s=sec%60;
+  return (h?h+':'+('0'+m).slice(-2):m)+':'+('0'+s).slice(-2);
+}
+function videoLead(){var l=parseInt(state.videoLead,10); return isNaN(l)?10:Math.max(0,l);}
+function setVideoLead(v){state.videoLead=Math.max(0,parseInt(v,10)||0); save(); renderVideo();}
+function setVideoOffset(period,v){
+  if(!state.videoOffsets) state.videoOffsets={};
+  var sec=parseVideoTime(v);
+  if(String(v).trim()&&sec===null){showToast('Bitte als Minuten:Sekunden eingeben, z. B. 4:12'); return;}
+  if(sec===null) delete state.videoOffsets[period]; else state.videoOffsets[period]=sec;
+  save(); renderVideo();
+}
+// Uhrzeit (ms) zu einer Spielzeit (Sekunden) im Drittel schätzen
+function gameSecToTs(period,sec){
+  var start=state.periodStarts&&state.periodStarts[period]; if(!start) return null;
+  var pts=[{g:0,t:start}];
+  state.shots.concat(state.bullies).forEach(function(e){if(e.period===period&&e.ts&&e.minute!=null) pts.push({g:e.minute*60,t:e.ts});});
+  var end=state.periodEnds&&state.periodEnds[period]; if(end&&period!=='Verlängerung') pts.push({g:1200,t:end});
+  pts.sort(function(a,b){return a.g-b.g||a.t-b.t;});
+  var mono=[]; pts.forEach(function(p){var last=mono[mono.length-1]; if(!last||(p.g>last.g&&p.t>last.t)) mono.push(p);}); // nur stimmige Stützpunkte
+  var lo=mono[0], hi=null;
+  for(var i=0;i<mono.length;i++){if(mono[i].g<=sec) lo=mono[i]; else {hi=mono[i]; break;}}
+  if(!hi) return lo.t+(sec-lo.g)*1000; // nach dem letzten Stützpunkt: Echtzeit = Spielzeit
+  return lo.t+(hi.t-lo.t)*(sec-lo.g)/(hi.g-lo.g);
+}
+function videoMarks(){
+  var offs=state.videoOffsets||{}, starts=state.periodStarts||{}, lead=videoLead(), marks=[], missing=[], noTs=0;
+  var played=PERIODS.filter(function(p){return starts[p];});
+  played.forEach(function(p){if(offs[p]==null) missing.push(p); else marks.push({sec:offs[p], label:p, order:0});});
+  function vt(period,ts){return offs[period]+(ts-starts[period])/1000-lead;}
+  var sc={Wir:0,Gegner:0};
+  state.shots.filter(function(s){return s.outcome==='Tor';}).slice().sort(function(a,b){
+    return (PERIODS.indexOf(a.period)-PERIODS.indexOf(b.period))||((a.ts||0)-(b.ts||0))||(a.minute-b.minute);
+  }).forEach(function(s){
+    sc[s.team]++;
+    if(offs[s.period]==null||!starts[s.period]) return;
+    if(!s.ts){noTs++; return;}
+    var lbl=(s.team==='Wir'?'Tor '+usName():'Gegentor')+' · '+sc.Wir+':'+sc.Gegner+(s.emptyNet?' (Empty Net)':'');
+    marks.push({sec:vt(s.period,s.ts), label:lbl, order:1});
+  });
+  state.specials.forEach(function(sp){
+    if(offs[sp.period]==null||!starts[sp.period]) return;
+    var ts=sp.ts, approx=false;
+    if(!ts){ts=gameSecToTs(sp.period, sp.startSec!=null?sp.startSec:(sp.minute||0)*60); approx=true;}
+    if(!ts) return;
+    marks.push({sec:vt(sp.period,ts), label:sp.type+(approx?' (ca.)':''), order:1});
+  });
+  marks.forEach(function(m){if(m.sec<0) m.sec=0;});
+  marks.sort(function(a,b){return a.sec-b.sec||a.order-b.order;});
+  if(marks.length&&marks[0].sec>0) marks.unshift({sec:0,label:'Vor dem Spiel',order:0}); // YouTube-Kapitel brauchen 0:00
+  return {marks:marks, missing:missing, noTs:noTs, played:played};
+}
+function renderVideo(){
+  var box=document.getElementById('video-offsets'); if(!box) return;
+  var r=videoMarks(), offs=state.videoOffsets||{};
+  var lead=document.getElementById('video-lead'); if(lead&&document.activeElement!==lead) lead.value=videoLead();
+  if(!r.played.length){
+    box.innerHTML='<p class="muted">Für dieses Spiel sind keine Anpfiff-Uhrzeiten gespeichert (erfasst mit einer älteren Version).</p>';
+    document.getElementById('video-text').value=''; document.getElementById('video-info').textContent=''; return;
+  }
+  box.innerHTML=r.played.map(function(p){
+    var v=offs[p]!=null?fmtVideoTime(offs[p]):'';
+    return '<div class="row" style="align-items:center; margin-top:6px;"><label class="muted" style="flex:1;">'+esc(p)+' – Anpfiff im Video bei</label>'+
+      '<input type="text" inputmode="numeric" placeholder="m:ss" value="'+v+'" style="width:100px; flex:0 0 auto;" onchange="setVideoOffset(\''+p+'\',this.value)"></div>';
+  }).join('');
+  var ready=r.played.length>r.missing.length;
+  document.getElementById('video-text').value=ready?r.marks.map(function(m){return fmtVideoTime(m.sec)+' '+m.label;}).join('\n'):'';
+  var info=[];
+  if(!ready) info.push('Videozeit mindestens eines Drittels eintragen, dann erscheint der Text.');
+  else if(r.missing.length) info.push('Ohne Videozeit, daher nicht im Text: '+r.missing.join(', ')+'.');
+  if(r.noTs) info.push(r.noTs+' Tor(e) ohne Uhrzeit (ältere Erfassung) fehlen.');
+  if(ready) info.push('In die YouTube-Beschreibung einfügen. Die Zeiten werden dort anklickbar. Kapitel bildet YouTube nur, wenn alle Marken mindestens 10 Sekunden auseinanderliegen.');
+  document.getElementById('video-info').textContent=info.join(' ');
+}
+function copyVideoText(){
+  var ta=document.getElementById('video-text'), txt=ta.value;
+  if(!txt){showToast('Noch kein Text – erst Videozeiten eintragen'); return;}
+  function fallback(){ta.removeAttribute('readonly'); ta.select(); var ok=false; try{ok=document.execCommand('copy');}catch(e){} ta.setAttribute('readonly',''); showToast(ok?'Text kopiert':'Kopieren nicht möglich – Text markieren und kopieren');}
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function(){showToast('Text kopiert');},fallback);
+  else fallback();
+}
+function saveVideoText(){
+  var txt=document.getElementById('video-text').value;
+  if(!txt){showToast('Noch kein Text – erst Videozeiten eintragen'); return;}
+  var opp=(state.teamOpp||'gegner').replace(/[^a-zA-Z0-9]/g,'_');
+  saveFile(new Blob([txt],{type:'text/plain;charset=utf-8'}),'youtube_zeitmarken_'+opp+'.txt').then(function(ok){if(ok) showToast('Zeitmarken gespeichert');});
 }
 
 /* ---------- Bildschirm wach halten (während Drittel und Pause) ---------- */
@@ -2143,7 +2258,7 @@ function newGame(btn){
     setTimeout(function(){if(btn.dataset.confirm==='1'){btn.dataset.confirm='0'; btn.textContent='Neues Spiel'; btn.classList.remove('danger-confirm');}},3500);
   }
 }
-function renderAll(){renderField(); renderStats(); renderSpecials(); renderBullies(); renderRosterAll(); renderPhase(); renderEvents();}
+function renderAll(){renderField(); renderStats(); renderSpecials(); renderBullies(); renderRosterAll(); renderPhase(); renderEvents(); renderVideo();}
 
 load();
 // Browser bitten, den Speicher nicht automatisch zu räumen (hilft v.a. auf iPad/iPhone)
