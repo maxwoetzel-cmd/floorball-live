@@ -64,7 +64,7 @@ Verantwortlich: Max Woetzel (Head-Coach Herren).
 - Auswertung je Drittel (Pause) und Gesamtauswertung: Spielstand, Torhüter (Aufs Tor = gehalten, Tor = Gegentor), Schussbilder
   Offense/Defense mit Zonenzahlen, Spielzeiten je Drittel und gesamt, Bully je Drittel, Über-/Unterzahl.
 - Export (JSON, CSV) direkt nach Drive; Sicherung vor „Neues Spiel“ und vor Import. Gerätewechsel über den Autosave.
-- Backend `Code.gs`: `doGet`, `getSchedule`, `getGames`, `getRoster`, `getGameLineup`, `getGameEvents`, `saveFile`, `readFile`, Testfunktionen. Aktuell Bereitstellung Version 5.
+- Backend `Code.gs`: `doGet`, `getSchedule`, `getGames`, `getRoster`, `getGameLineup`, `getGameEvents`, `saveFile`, `readFile`, `syncExchange`, Testfunktionen. Neue Version mit `syncExchange` am 08.11.2026 bereitgestellt (vorher Version 5).
 - Testanleitung für andere Tester (Google-Dokument, Stand 08.11.2026).
 - Design-Runde 08.11.2026 (Tablet in der Halle): höherer Kontrast für `--text-muted`, größere Kleinschrift, Spielstand 40 px,
   Empty-Net-Badge in Amber (`--accent`) statt Rot, Toast oben, Vibration plus Toast nach jedem erfassten Schuss.
@@ -109,7 +109,7 @@ Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie 
 8. GitHub-Konto mit Zwei-Faktor-Anmeldung absichern (siehe Fallstricke).
 9. Prüfen, ob die Wake Lock API in der Apps-Script-Web-App (eingebettetes Fenster) auf dem Tablet erlaubt ist. Im Testbrowser wurde sie abgelehnt, dann greift nur der Hinweis.
 10. YouTube-Zeitmarken am ersten echten Spiel prüfen (Genauigkeit der Tore, Schätzung „(ca.)“ bei Strafen, Kopieren in der Web-App). Video: CapCut, Upload YouTube, Aufnahme pro Spiel, Drittelpausen teils geschnitten.
-11. Paket 3 live schalten: `Code.gs` mit `syncExchange` in den Skript-Editor einfügen, speichern, neue Version der bestehenden Bereitstellung (Nutzer). Danach mit zwei echten Geräten testen. Paket 4: Saisonauswertung und Spielbericht (alle dürfen alles sehen, Ablageort für Spieler offen).
+11. Paket 3 ist bereitgestellt (Backend 08.11.2026). Offen: Test mit zwei echten Geräten (Schuss auf Gerät 1, Wechsel auf Gerät 2, Offline-Phase, Neues Spiel). Paket 4: Saisonauswertung und Spielbericht (alle dürfen alles sehen, Ablageort für Spieler offen).
 12. Geparkt: Reihe pro Schuss (Reihenwechsel alle 40–60 s, aktuell kein Bedarf).
 
 ---
