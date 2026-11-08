@@ -5,6 +5,7 @@
  *  1. App ausliefern (liest die neueste floorball_live_app_7.html aus dem Drive-Ordner)
  *  2. Saisonmanager abfragen – der API-Schlüssel bleibt hier geheim
  *  3. Dateien in den Drive-Ordner "Exporte" schreiben
+ *  4. Gemeinsames Erfassen mit mehreren Geräten (syncExchange)
  *
  * WICHTIG: Der Saisonmanager-Schlüssel gehört NICHT in diesen Code, sondern in
  * Projekteinstellungen > Skripteigenschaften > SAISONMANAGER_KEY.
@@ -171,6 +172,69 @@ function readFile(name) {
     if (!newest || f.getLastUpdated() > newest.getLastUpdated()) newest = f;
   }
   return newest ? newest.getBlob().getDataAsString('UTF-8') : null;
+}
+
+/* ---------- Gemeinsam erfassen (mehrere Geräte) ----------
+ * Ein gemeinsamer Spielstand mit Versionsnummer. Die Geräte führen Änderungen selbst zusammen
+ * (Drei-Wege-Abgleich in der App); der Server nimmt einen Stand nur an, wenn das Gerät die
+ * aktuelle Version kannte. Sonst bekommt es den neuesten Stand zurück und gleicht erneut ab.
+ * Speicher: Versionsnummer in den Skripteigenschaften, Inhalt im Zwischenspeicher (schnell)
+ * und in Drive "Exporte/sync_spiel.json" (dauerhaft).
+ *
+ * req = { dev, name, known (Version des Geräts), payload (Text oder null), force (true = neues Spiel) }
+ * Antwort = { ok, version, data (nur wenn neuer als known), devices: [{dev, name}] }
+ */
+function syncExchange(req) {
+  req = req || {};
+  var lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    var props = PropertiesService.getScriptProperties();
+    var ver = parseInt(props.getProperty('SYNC_VERSION') || '0', 10);
+    var res = { ok: false, version: ver, devices: syncTouchDevice_(req.dev, req.name) };
+    if (req.payload != null && (req.force || req.known === ver)) {
+      var txt = String(req.payload);
+      if (txt.length > CONFIG.MAX_CHARS) throw new Error('Spielstand zu groß.');
+      ver++;
+      syncWrite_(txt, ver);
+      props.setProperty('SYNC_VERSION', String(ver));
+      res.ok = true; res.version = ver;
+      return res;
+    }
+    if (req.known !== ver && ver > 0) res.data = syncRead_(ver);
+    return res;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function syncWrite_(txt, ver) {
+  var cache = CacheService.getScriptCache();
+  if (txt.length < 90000) cache.put('sync_data', JSON.stringify({ v: ver, d: txt }), 21600);
+  else cache.remove('sync_data');
+  saveFile('sync_spiel.json', txt, true);
+}
+
+function syncRead_(ver) {
+  var c = CacheService.getScriptCache().get('sync_data');
+  if (c) {
+    try { var o = JSON.parse(c); if (o.v === ver) return o.d; } catch (e) { /* Rückfall Drive */ }
+  }
+  return readFile('sync_spiel.json');
+}
+
+/** Merkt sich, welche Geräte in den letzten 30 Sekunden da waren. */
+function syncTouchDevice_(dev, name) {
+  var cache = CacheService.getScriptCache(), now = Date.now(), list = {};
+  try { list = JSON.parse(cache.get('sync_devices') || '{}'); } catch (e) { list = {}; }
+  if (dev) list[String(dev).slice(0, 40)] = { n: String(name || '').slice(0, 40), t: now };
+  var out = [];
+  Object.keys(list).forEach(function (k) {
+    if (now - list[k].t > 30000) delete list[k];
+    else out.push({ dev: k, name: list[k].n });
+  });
+  cache.put('sync_devices', JSON.stringify(list), 3600);
+  return out;
 }
 
 /* ---------- privat ---------- */

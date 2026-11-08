@@ -46,6 +46,16 @@ Nicht "Neue Bereitstellung" wählen, das erzeugt eine neue Adresse.
 deshalb mit Zwei-Faktor-Anmeldung geschützt sein. Der Saisonmanager-Schlüssel ist aus der App heraus
 nicht lesbar.
 
+## Gemeinsam erfassen (mehrere Geräte)
+Ab Backend-Stand mit `syncExchange` (08.11.2026) können mehrere Geräte am selben Spiel arbeiten.
+Dafür muss `Code.gs` einmal als **neue Version der bestehenden Bereitstellung** veröffentlicht werden
+(siehe oben). Ohne diese Version zeigt die App beim Einschalten von „Gemeinsam mit anderen Geräten“
+nur „keine Verbindung“, alles andere läuft normal.
+
+Speicher: Versionsnummer in der Skripteigenschaft `SYNC_VERSION` (legt das Skript selbst an),
+Inhalt in `Exporte/sync_spiel.json`. Beide nicht von Hand ändern. Es darf nur **eine** Datei
+`sync_spiel.json` geben.
+
 ## Bekannte Grenzen (nicht getestet)
 - Die App braucht beim Laden Internet. Ohne Netz startet sie nicht.
 - Im Apps-Script-Fenster kann der Browserspeicher (`localStorage`) anders reagieren als bei der

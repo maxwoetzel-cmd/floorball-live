@@ -203,12 +203,18 @@
   .ev-row .ev-what{flex:1; min-width:140px; font-size:14px;}
   .ev-row select{min-height:40px; width:auto;}
   .ev-dot{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle;}
+  /* Gemeinsam erfassen: nur in der Web-App; Rollen blenden im Spiel Bereiche aus */
+  body:not(.webapp) #sec-sync{display:none !important;}
+  body.role-shots.phase-play #sec-lineup{display:none;}
+  body.role-subs.phase-play #sec-shot{display:none;}
+  body.role-subs.phase-play #sec-lineup .sec-body{display:block !important;}
 </style>
 </head>
 <body>
 
 <h1>Floorball live</h1>
 <div id="drive-status" class="muted" style="margin:-6px 0 8px;"></div>
+<div id="sync-status" class="muted" style="margin:-4px 0 8px; display:none;"></div>
 <div id="wake-status" class="muted status-hint" style="margin:-4px 0 8px; display:none;">Bildschirm bleibt nicht automatisch an. Bitte die Bildschirmsperre am Gerät für das Spiel auf „nie“ oder 30 Minuten stellen.</div>
 
 <div id="topbar">
@@ -283,6 +289,23 @@
         <button type="button" onclick="closeGameList()" style="flex:0 0 auto;">Schließen ✕</button>
       </div>
       <div id="sm-list"></div>
+    </div>
+  </div>
+</section>
+
+<section id="sec-sync" data-ph="prep" data-step="1">
+  <h2>Gemeinsam erfassen</h2>
+  <p class="muted" style="margin:0 0 8px;">Mehrere Geräte arbeiten am selben Spiel, Änderungen erscheinen auf den anderen nach wenigen Sekunden. Vorbereitung (Spiel, Kader, Aufstellung) am besten auf einem Gerät erledigen und das zweite danach zuschalten.</p>
+  <div class="seg" id="sync-seg">
+    <button type="button" data-on="0" onclick="setSyncOn(false)">Nur dieses Gerät</button>
+    <button type="button" data-on="1" onclick="setSyncOn(true)">Gemeinsam mit anderen Geräten</button>
+  </div>
+  <div id="role-box" style="display:none;">
+    <p class="muted" style="margin:10px 0 4px;">Aufgabe dieses Geräts im Spiel (blendet nur Bereiche aus, erfassen lässt sich weiterhin alles):</p>
+    <div class="seg" id="role-seg">
+      <button type="button" data-r="all" onclick="setRole('all')">Alles</button>
+      <button type="button" data-r="shots" onclick="setRole('shots')">Schüsse und Bullys</button>
+      <button type="button" data-r="subs" onclick="setRole('subs')">Wechsel</button>
     </div>
   </div>
 </section>
@@ -523,7 +546,7 @@ var ZONE_COLS=[{key:'links',x:8,w:141},{key:'mitte',x:149,w:142},{key:'rechts',x
 var ZONE_ROWS_OFF=[{key:'tornah',y:8,h:151},{key:'zentral',y:159,h:152},{key:'fern',y:311,h:151}];
 var ZONE_ROWS_DEF=[{key:'fern',y:8,h:151},{key:'zentral',y:159,h:152},{key:'tornah',y:311,h:151}];
 
-function save(){try{localStorage.setItem(STORAGE_KEY, JSON.stringify(state));}catch(e){} scheduleDriveSave();}
+function save(){try{localStorage.setItem(STORAGE_KEY, JSON.stringify(state));}catch(e){} scheduleDriveSave(); syncSoon();}
 function load(){
   try{
     var raw=localStorage.getItem(STORAGE_KEY);
@@ -657,6 +680,7 @@ function resetGameData(){
   state.roster.forEach(function(p){p.events=[]; p.onField=false;});
   state.emptyNet=false; state.lineup.extra=null; state.pendingZone=null; state.period='1. Drittel'; state.minute=0;
   state.periodStarts={}; state.periodEnds={};
+  syncNewSession();
 }
 function beginGame(){
   if(!hasGameData()){startPeriod('1. Drittel'); return;}
@@ -944,7 +968,7 @@ function importSmSpecials(silent){
     var segs=deriveSpecials(evs,res.side);
     // Saisonmanager ist maßgeblich: manuelle Eingaben werden ersetzt, damit nichts doppelt zählt
     state.specials=[];
-    segs.forEach(function(g){g.id=state.nextSpecialId++; state.specials.push(g);});
+    segs.forEach(function(g){g.id='sm-'+g.period+'-'+g.startSec+'-'+g.type; state.specials.push(g);});
     save(); renderSpecials(); renderSummary(); renderVideo();
     if(!silent) showToast(segs.length+' Über-/Unterzahl aus dem Saisonmanager');
     return segs.length;
@@ -1265,7 +1289,7 @@ function activeGoalieId(){
 function confirmShot(outcome){
   if(!state.pendingZone) return;
   var onIds=state.roster.filter(function(p){return p.onField;}).map(function(p){return p.id;});
-  var shot={id:state.nextShotId++, period:state.period, team:state.currentTeam, zone:state.pendingZone.name, outcome:outcome, minute:curMinute(), ts:Date.now(), onFieldIds:onIds};
+  var shot={id:newId(), dev:SYNC_DEV, period:state.period, team:state.currentTeam, zone:state.pendingZone.name, outcome:outcome, minute:curMinute(), ts:Date.now(), onFieldIds:onIds};
   if(state.currentTeam==='Gegner') shot.goalieId=activeGoalieId();
   if(state.emptyNet) shot.emptyNet=true;
   state.shots.push(shot);
@@ -1276,7 +1300,7 @@ function confirmShot(outcome){
   showToast((shot.team==='Gegner'?oppName():usName())+': '+outcome);
 }
 function cancelShot(){state.pendingZone=null; document.getElementById('outcome-bar').classList.remove('show'); renderShots();}
-function undoLastShot(){if(!state.shots.length)return; state.shots.pop(); save(); renderShots(); renderStats(); renderPlaytimes(); renderEvents();}
+function undoLastShot(){var s=lastOwn(state.shots); if(!s)return; state.shots=state.shots.filter(function(x){return x!==s;}); save(); renderShots(); renderStats(); renderPlaytimes(); renderEvents();}
 function zoneCenterForCurrentView(zoneName){
   var parts=zoneName.split('-'), rows=currentRows();
   var col=ZONE_COLS.find(function(c){return c.key===parts[1];});
@@ -1303,13 +1327,14 @@ function renderShots(){
 }
 
 function addBully(won){
-  state.bullies.push({id:state.nextBullyId++, period:state.period, minute:curMinute(), ts:Date.now(), won:won});
+  state.bullies.push({id:newId(), dev:SYNC_DEV, period:state.period, minute:curMinute(), ts:Date.now(), won:won});
   save(); renderBullies(); renderEvents();
   showToast('Bully '+(won?'gewonnen':'verloren')+' erfasst · Min '+curMinute()+' · '+bullyCounts().w+' : '+bullyCounts().l);
 }
 function undoBully(){
-  if(!state.bullies.length){showToast('Kein Bully zum Zurücknehmen'); return;}
-  var last=state.bullies.pop(); save(); renderBullies(); renderEvents();
+  var last=lastOwn(state.bullies);
+  if(!last){showToast('Kein Bully zum Zurücknehmen'); return;}
+  state.bullies=state.bullies.filter(function(x){return x!==last;}); save(); renderBullies(); renderEvents();
   showToast('Letzter Bully ('+(last.won?'gewonnen':'verloren')+') zurückgenommen · '+bullyCounts().w+' : '+bullyCounts().l);
 }
 // Bullys des aktuellen Drittels: gewonnen / verloren
@@ -1396,7 +1421,7 @@ function renderGoalieStats(){
 }
 
 function addSpecial(type){
-  state.specials.push({id:state.nextSpecialId++, type:type, period:state.period, minute:curMinute(), ts:Date.now(), success:null, goalsFor:0, goalsAgainst:0});
+  state.specials.push({id:newId(), type:type, period:state.period, minute:curMinute(), ts:Date.now(), success:null, goalsFor:0, goalsAgainst:0});
   save(); renderSpecials(); showToast(type+' erfasst (Min '+curMinute()+')');
 }
 function updateSpecial(id,field,value){
@@ -1409,7 +1434,7 @@ function removeSpecial(id){state.specials=state.specials.filter(function(x){retu
 function renderSpecials(){
   var el=document.getElementById('special-list');
   if(!state.specials.length){el.innerHTML='<p class="muted" style="padding:6px 0;">Noch keine Über-/Unterzahl erfasst.</p>'; renderSpecialSummary(); return;}
-  el.innerHTML=state.specials.slice().sort(function(a,b){return b.id-a.id;}).map(function(s){
+  el.innerHTML=state.specials.slice().sort(function(a,b){return (PERIODS.indexOf(b.period)-PERIODS.indexOf(a.period))||((b.minute||0)-(a.minute||0));}).map(function(s){
     if(s.src==='sm') return smSpecialRow(s);
     return '<div style="border-top:1px solid var(--border); padding:10px 0;">'+
       '<div class="row" style="justify-content:space-between;"><strong style="font-size:14px;">'+s.type+'</strong><span class="muted">'+s.period+', Min '+s.minute+'</span><button type="button" class="icon-btn" aria-label="Entfernen" onclick="removeSpecial('+s.id+')">&times;</button></div>'+
@@ -1604,6 +1629,182 @@ function saveVideoText(){
   saveFile(new Blob([txt],{type:'text/plain;charset=utf-8'}),'youtube_zeitmarken_'+opp+'.txt').then(function(ok){if(ok) showToast('Zeitmarken gespeichert');});
 }
 
+/* ---------- Gemeinsam erfassen (mehrere Geräte, nur Web-App) ----------
+   Jedes Gerät hält drei Stände: den eigenen, den zuletzt mit dem Server abgeglichenen ("base") und den des Servers.
+   Drei-Wege-Abgleich: Was nur hier geändert wurde, gilt von hier; was nur anderswo geändert wurde, kommt von dort.
+   Schüsse, Bullys, Über-/Unterzahl und Kader werden je Eintrag (id) abgeglichen, also gehen gleichzeitige Einträge
+   beider Geräte nicht verloren; Löschungen setzen sich durch. Alles andere (Drittel, Minute, Aufstellung …) je Feld.
+   Gerätebezogen bleiben: Ansicht Wir/Gegner, halbfertiger Schuss, Vorbereitungsschritt, "Startseite"-Ansicht. */
+var SYNC_DEV=(function(){var d=null; try{d=localStorage.getItem('fl_dev');}catch(e){} if(!d){d='d'+Math.random().toString(36).slice(2,8); try{localStorage.setItem('fl_dev',d);}catch(e){}} return d;})();
+var DEV_NUM=Math.floor(Math.random()*100), lastIdIssued=0;
+// Eindeutige Zahl je Eintrag über alle Geräte: Zeit in ms mal 100 plus Gerätezahl
+function newId(){var id=Date.now()*100+DEV_NUM; if(id<=lastIdIssued) id=lastIdIssued+100; lastIdIssued=id; return id;}
+// Letzter eigener Eintrag (für "Rückgängig"); ältere Einträge ohne Geräteangabe zählen als eigene
+function lastOwn(list){
+  var own=list.filter(function(x){return !x.dev||x.dev===SYNC_DEV;});
+  return own.reduce(function(best,x){return !best||((x.ts||0)>(best.ts||0))||((x.ts||0)===(best.ts||0)&&x.id>best.id)?x:best;},null);
+}
+var SYNC_LOCAL_KEYS={pendingZone:1,currentTeam:1,step:1,resume:1,nextShotId:1,nextSpecialId:1,nextBullyId:1,nextPlayerId:1,syncId:1,syncCreated:1};
+var SYNC_ITEM_KEYS={shots:1,bullies:1,specials:1,roster:1};
+var sync={on:false, base:null, version:-1, busy:false, soon:null, force:false, devices:[], lastOk:0, failSince:0, role:'all'};
+function stableStr(v){
+  if(Array.isArray(v)) return '['+v.map(stableStr).join(',')+']';
+  if(v&&typeof v==='object') return '{'+Object.keys(v).sort().filter(function(k){return v[k]!==undefined;}).map(function(k){return JSON.stringify(k)+':'+stableStr(v[k]);}).join(',')+'}';
+  return JSON.stringify(v===undefined?null:v);
+}
+function deepCopy(o){return JSON.parse(JSON.stringify(o));}
+// Der Teil des Spielstands, den alle Geräte teilen. In der "Startseite"-Ansicht zählt die eigentliche Spielphase.
+function syncShared(){
+  var o={}; Object.keys(state).forEach(function(k){if(!SYNC_LOCAL_KEYS[k]) o[k]=state[k];});
+  if(state.phase==='prep'&&state.resume) o.phase=state.resume;
+  return deepCopy(o);
+}
+function idMap(arr){var m={}; (arr||[]).forEach(function(x){m[String(x.id)]=x;}); return m;}
+function mergeItems(b,l,r,hasBase){
+  var bm=idMap(b), lm=idMap(l), rm=idMap(r), ids=[], seen={}, out=[];
+  (r||[]).concat(l||[]).forEach(function(x){var k=String(x.id); if(!seen[k]){seen[k]=1; ids.push(k);}});
+  ids.forEach(function(k){
+    var B=bm[k], L=lm[k], R=rm[k];
+    if(L&&R){out.push(hasBase&&B&&stableStr(L)!==stableStr(B)?L:R);}
+    else if(L){if(!hasBase||!B) out.push(L);}   // neu hier – oder anderswo gelöscht
+    else if(R){if(!hasBase||!B) out.push(R);}   // neu dort – oder hier gelöscht
+  });
+  return out;
+}
+function merge3(b,l,r){
+  var out={}, keys={}, hasBase=!!b;
+  Object.keys(l).concat(Object.keys(r)).forEach(function(k){keys[k]=1;});
+  Object.keys(keys).forEach(function(k){
+    if(SYNC_ITEM_KEYS[k]){out[k]=mergeItems(hasBase?b[k]:[], l[k], r[k], hasBase); return;}
+    var L=stableStr(l[k]), R=stableStr(r[k]);
+    var v=(L===R||!hasBase)?r[k]:(L===stableStr(b[k])?r[k]:l[k]);
+    if(v===undefined) v=(r[k]!==undefined)?r[k]:l[k];
+    if(v!==undefined) out[k]=deepCopy(v);
+  });
+  return out;
+}
+function syncApply(shared){
+  var before=stableStr(syncShared()), ph=shared.phase;
+  Object.keys(shared).forEach(function(k){if(k!=='phase'&&!SYNC_LOCAL_KEYS[k]) state[k]=shared[k];});
+  if(state.phase==='prep'&&state.resume) state.resume=(ph==='prep')?'':ph; // in der Startseiten-Ansicht bleiben
+  else if(ph) state.phase=ph;
+  if(stableStr(syncShared())===before) return false;
+  try{localStorage.setItem(STORAGE_KEY, JSON.stringify(state));}catch(e){}
+  scheduleDriveSave();
+  var mi=document.getElementById('current-minute'); if(mi&&document.activeElement!==mi) mi.value=state.minute||0;
+  ['team-us','team-opp'].forEach(function(id){var el=document.getElementById(id); if(el&&document.activeElement!==el) el.value=(id==='team-us'?state.teamUs:state.teamOpp)||'';});
+  updateMinuteCaption(); renderAll(); renderGameInfo();
+  return true;
+}
+function syncNewSession(){
+  state.syncId='s'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  state.syncCreated=Date.now();
+  sync.force=true; sync.base=null;
+}
+function syncStorePrefs(){
+  try{localStorage.setItem('fl_sync',JSON.stringify({on:sync.on, role:sync.role, base:sync.base, version:sync.version}));}catch(e){}
+}
+function syncLoadPrefs(){
+  try{var p=JSON.parse(localStorage.getItem('fl_sync')||'null'); if(p){sync.on=!!p.on; sync.role=p.role||'all'; sync.base=p.base||null; sync.version=typeof p.version==='number'?p.version:-1;}}catch(e){}
+  applyRole();
+  return sync.on&&inWebApp();
+}
+function devName(){
+  var ua=navigator.userAgent||'', t=/iPad|Tablet/i.test(ua)||(/Android/i.test(ua)&&!/Mobile/i.test(ua))?'Tablet':(/Mobile|iPhone|Android/i.test(ua)?'Handy':'Computer');
+  return t+({shots:' · Schüsse',subs:' · Wechsel'}[sync.role]||'');
+}
+var syncInterval=null;
+function syncStart(){
+  if(!inWebApp()) return;
+  sync.on=true; if(!syncInterval) syncInterval=setInterval(syncTick,4000);
+  syncTick(); updateSyncStatus();
+}
+function syncStop(){
+  sync.on=false; clearInterval(syncInterval); syncInterval=null; clearTimeout(sync.soon);
+  updateSyncStatus();
+}
+function syncSoon(){if(!sync||!sync.on) return; clearTimeout(sync.soon); sync.soon=setTimeout(syncTick,800);}
+function syncTick(){
+  if(!sync.on||!inWebApp()) return;
+  if(sync.busy){if(Date.now()-sync.busySince<30000) return; sync.busy=false;} // hängende Anfrage nach 30 s aufgeben
+  var joined=sync.version>=0;
+  if(joined&&!state.syncId) syncNewSession();
+  var cur=syncShared(), changed=joined&&(sync.force||!sync.base||stableStr(cur)!==stableStr(sync.base));
+  var payload=changed?JSON.stringify({syncId:state.syncId, syncCreated:state.syncCreated, data:cur}):null;
+  sync.busy=true; sync.busySince=Date.now();
+  gsRun('syncExchange',[{dev:SYNC_DEV, name:devName(), known:sync.version, payload:payload, force:changed&&sync.force}]).then(function(res){
+    sync.busy=false; sync.failSince=0; sync.lastOk=Date.now(); sync.devices=(res&&res.devices)||[];
+    if(res.ok){sync.version=res.version; sync.base=cur; sync.force=false;}
+    else if(res.data){syncReceive(res.data,res.version);}
+    else if(!joined){sync.version=res.version; if(res.version===0||!state.syncId) syncNewSession(); syncSoon();} // noch kein gemeinsamer Stand: diesen anlegen
+    syncStorePrefs(); updateSyncStatus();
+  }).catch(function(){
+    sync.busy=false; if(!sync.failSince) sync.failSince=Date.now(); updateSyncStatus();
+  });
+}
+function syncReceive(text,ver){
+  var p; try{p=JSON.parse(text);}catch(e){return;}
+  if(!p||!p.data) return;
+  if(p.syncId!==state.syncId){
+    // Anderes Spiel auf dem Server. Ist unseres neuer (z. B. hier "Neues Spiel"), setzt es sich durch.
+    if(state.syncId&&sync.version>=0&&(state.syncCreated||0)>(p.syncCreated||0)){sync.version=ver; sync.force=true; syncSoon(); return;}
+    var adopt=function(){
+      state.syncId=p.syncId; state.syncCreated=p.syncCreated;
+      // Felder, die es im fremden Stand nicht gibt, zurücksetzen
+      ['periodStarts','periodEnds','videoOffsets','game'].forEach(function(k){if(p.data[k]===undefined) delete state[k];});
+      syncApply(p.data); sync.base=deepCopy(p.data); sync.version=ver; sync.force=false;
+      syncStorePrefs(); renderAll(); updateSyncStatus();
+      showToast('Gemeinsamer Spielstand übernommen');
+    };
+    var first=sync.version<0;
+    if(first&&hasGameData()&&state.syncId!==p.syncId){
+      var opp=(p.data.teamOpp||'Gegner'), n=(p.data.shots||[]).length;
+      if(!confirm('Auf einem anderen Gerät läuft ein Spielstand (gegen '+opp+', '+n+' Schüsse). Diesen übernehmen? Der Stand auf diesem Gerät wird vorher gesichert.')){
+        setSyncOn(false); showToast('Gemeinsam erfassen ausgeschaltet'); return;
+      }
+      sync.busy=true;
+      exportData().then(function(ok){sync.busy=false; if(ok) adopt(); else {setSyncOn(false); showToast('Nicht gesichert – nichts übernommen');}});
+      return;
+    }
+    adopt(); return;
+  }
+  var merged=merge3(sync.base, syncShared(), p.data);
+  syncApply(merged);
+  sync.base=deepCopy(p.data); sync.version=ver;
+  if(stableStr(syncShared())!==stableStr(sync.base)) syncSoon(); // eigene Änderungen gleich hinterherschicken
+}
+function setSyncOn(on){
+  if(on===sync.on) return renderSyncUi();
+  if(on){sync.version=-1; sync.base=null; sync.force=false; syncStart();}
+  else syncStop();
+  syncStorePrefs(); renderSyncUi();
+}
+function applyRole(){
+  var b=document.body, r=sync.on?sync.role:'all';
+  b.classList.toggle('role-shots',r==='shots'); b.classList.toggle('role-subs',r==='subs');
+}
+function setRole(r){sync.role=r; syncStorePrefs(); renderSyncUi(); syncSoon();}
+function renderSyncUi(){
+  document.querySelectorAll('#sync-seg button').forEach(function(b){b.classList.toggle('active',(b.dataset.on==='1')===sync.on);});
+  document.querySelectorAll('#role-seg button').forEach(function(b){b.classList.toggle('active',b.dataset.r===sync.role);});
+  var rb=document.getElementById('role-box'); if(rb) rb.style.display=sync.on?'block':'none';
+  applyRole(); updateSyncStatus();
+}
+function updateSyncStatus(){
+  var el=document.getElementById('sync-status'); if(!el) return;
+  if(!sync.on||!inWebApp()){el.style.display='none'; return;}
+  el.style.display='block';
+  var warn=sync.failSince&&(Date.now()-sync.failSince)>20000, txt;
+  if(warn) txt='⚠ Gemeinsam: seit '+Math.round((Date.now()-sync.failSince)/1000)+' s keine Verbindung. Erfasstes bleibt hier und wird nachgeschickt.';
+  else if(sync.version<0) txt='Gemeinsam: verbinde …';
+  else{
+    var others=sync.devices.filter(function(d){return d.dev!==SYNC_DEV;});
+    txt='Gemeinsam: '+(others.length?'verbunden mit '+others.map(function(d){return d.name||'Gerät';}).join(', '):'kein weiteres Gerät aktiv')+
+      (sync.lastOk?' · abgeglichen '+new Date(sync.lastOk).toLocaleTimeString('de-DE',{hour:'2-digit',minute:'2-digit',second:'2-digit'}):'');
+  }
+  el.textContent=txt; el.classList.toggle('status-warn',!!warn);
+}
+
 /* ---------- Bildschirm wach halten (während Drittel und Pause) ---------- */
 var wakeLock=null, wakePending=false;
 function wantWake(){return state.phase==='play'||state.phase==='break';}
@@ -1634,13 +1835,13 @@ function loadBulkRoster(){
   var added=0;
   lines.forEach(function(line){
     var m=line.match(/^(\S+)\s+(.+)$/);
-    state.roster.push({id:state.nextPlayerId++, nr:m?m[1]:'', name:m?m[2]:line, isCaptain:false, isGoalie:false, pos:'', present:false, onField:false, events:[]});
+    state.roster.push({id:newId(), nr:m?m[1]:'', name:m?m[2]:line, isCaptain:false, isGoalie:false, pos:'', present:false, onField:false, events:[]});
     added++;
   });
   document.getElementById('roster-bulk').value='';
   save(); renderRosterAll(); showToast(added+' Spieler hinzugefügt');
 }
-function addPlayer(){state.roster.push({id:state.nextPlayerId++, nr:'', name:'', isCaptain:false, isGoalie:false, pos:'', present:false, onField:false, events:[]}); save(); renderRosterAll(); showRosterEdit(true);}
+function addPlayer(){state.roster.push({id:newId(), nr:'', name:'', isCaptain:false, isGoalie:false, pos:'', present:false, onField:false, events:[]}); save(); renderRosterAll(); showRosterEdit(true);}
 function toggleRosterEdit(){var el=document.getElementById('roster-edit'); showRosterEdit(el.style.display==='none');}
 function showRosterEdit(show){
   document.getElementById('roster-edit').style.display=show?'block':'none';
@@ -1996,7 +2197,7 @@ function findRosterMatch(p){
   });
 }
 function newRosterPlayer(p,name,present){
-  var r={id:state.nextPlayerId++, nr:'', name:name, first:p.first||'', last:p.last||name,
+  var r={id:newId(), nr:'', name:name, first:p.first||'', last:p.last||name,
     isCaptain:!!p.captain, isGoalie:!!p.goalie, pos:p.goalie?'':(p.pos||''), present:!!present, onField:false, events:[]};
   setJerseyNumbers(r,p);
   return r;
@@ -2116,7 +2317,7 @@ function updateDriveStatus(){
   } else return; // Startmeldung stehen lassen
   el.textContent=txt; el.classList.toggle('status-warn',warn);
 }
-setInterval(updateDriveStatus,30000);
+setInterval(function(){updateDriveStatus(); if(typeof updateSyncStatus==='function') updateSyncStatus();},30000);
 window.addEventListener('online',function(){if(driveFails>0) flushDriveSave();});
 // Ist der Browserspeicher leer: gesicherten Spielstand aus Drive anbieten, sonst den Stammkader laden
 function offerDriveRestore(){
@@ -2225,7 +2426,7 @@ function applyImported(imported){
         if(p.isGoalie===undefined)p.isGoalie=false;
         if(p.pos===undefined)p.pos='';
       });
-      save(); syncControlsFromState(); renderAll(); showToast('Spielstand importiert');
+      syncNewSession(); save(); syncControlsFromState(); renderAll(); showToast('Spielstand importiert');
     }catch(err){showToast('Datei nicht lesbar');}
 }
 function syncControlsFromState(){
@@ -2248,7 +2449,7 @@ function newGame(btn){
       if(!ok){showToast('Abgebrochen – Stand nicht gesichert, nichts gelöscht'); return;}
       var keepRoster=state.roster.map(function(p){return {id:p.id, nr:p.nr, name:p.name, isCaptain:!!p.isCaptain, isGoalie:!!p.isGoalie, pos:p.pos||'', present:false, onField:false, events:[], smId:p.smId, first:p.first, last:p.last, nrBlau:p.nrBlau, nrWeiss:p.nrWeiss};});
       state={teamUs:state.teamUs, teamOpp:'', period:'1. Drittel', currentTeam:'Wir', pendingZone:null, minute:0, game:null, phase:'prep', emptyNet:false, jersey:'blau', shots:[], specials:[], bullies:[], roster:keepRoster, lineup:emptyLineup(), nextShotId:1, nextSpecialId:1, nextBullyId:1, nextPlayerId:state.nextPlayerId};
-      selectedSlot=null;
+      selectedSlot=null; syncNewSession();
       save();
       document.getElementById('current-minute').value=0; syncControlsFromState(); renderAll();
       showToast(backedUp ? 'Neues Spiel – alter Stand wurde gesichert, Kader bleibt' : 'Neues Spiel – Kader bleibt erhalten');
@@ -2267,7 +2468,9 @@ syncControlsFromState();
 updateMinuteCaption();
 renderAll();
 if(inWebApp()){
-  document.body.classList.add('webapp'); setDriveStatus('Drive: verbunden'); offerDriveRestore();
+  document.body.classList.add('webapp'); setDriveStatus('Drive: verbunden');
+  if(syncLoadPrefs()) syncStart(); else offerDriveRestore();
+  renderSyncUi();
   // Antippen von "Gegner" öffnet die Spielliste (ohne Bildschirmtastatur; selbst tippen über "Gegner selbst eintippen")
   var oppIn=document.getElementById('team-opp'); oppIn.setAttribute('inputmode','none'); oppIn.placeholder='Gegner – antippen für Spielplan';
   document.getElementById('manual-special').open=false; // manuelle Erfassung nur noch als Notfall

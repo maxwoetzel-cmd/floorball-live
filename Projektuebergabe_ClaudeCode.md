@@ -84,6 +84,15 @@ Verantwortlich: Max Woetzel (Head-Coach Herren).
   Vorlauf einstellbar (`state.videoLead`, Standard 10 s). `videoMarks` erzeugt: „0:00 Vor dem Spiel“ (für YouTube-Kapitel), Drittelbeginn, Tore mit laufendem Spielstand,
   Gegentore, Über-/Unterzahl. Strafen aus dem Saisonmanager haben nur Spielzeit (`startSec`); ihre Uhrzeit schätzt `gameSecToTs` linear aus den erfassten
   Ereignissen des Drittels, Kennzeichnung „(ca.)“. Text kopieren (Zwischenablage, Rückfall: markieren) oder als .txt speichern (Web-App: Drive).
+- Paket 3 (08.11.2026, **Gemeinsam erfassen**, nur Web-App): Schalter in Schritt 1 (`#sec-sync`, `setSyncOn`), Statuszeile `#sync-status`.
+  - Backend `syncExchange` (Versionsnummer `SYNC_VERSION` in den Skripteigenschaften, Inhalt im Script-Cache und in `Exporte/sync_spiel.json`, LockService). Der Server nimmt einen Stand nur an, wenn das Gerät die aktuelle Version kennt (`known`), sonst schickt er den neuesten zurück.
+  - App: Drei-Wege-Abgleich (`merge3`: base = zuletzt abgeglichener Stand). Schüsse, Bullys, Specials und Kader je Eintrag (`id`), Löschungen setzen sich durch, bei gleichzeitiger Änderung desselben Eintrags gewinnt das eigene Gerät. Übrige Felder (Phase, Drittel, Minute, Aufstellung, Empty Net …) je Feld.
+  - Gerätebezogen (`SYNC_LOCAL_KEYS`): Ansicht Wir/Gegner, halbfertiger Schuss, Vorbereitungsschritt, Startseiten-Ansicht (`resume`). Geht ein Gerät zur Startseite, bleibt das andere im Spiel.
+  - IDs sind jetzt geräteübergreifend eindeutig (`newId()` = ms × 100 + Gerätezahl). Saisonmanager-Specials haben feste IDs (`sm-Drittel-Start-Typ`), damit beide Geräte dieselben erzeugen. „Rückgängig“ nimmt nur Einträge des eigenen Geräts zurück (`lastOwn`, Feld `dev`).
+  - Spielsitzung `state.syncId`/`syncCreated`: Neues Spiel, Import und Spielstart mit Altdaten erzeugen eine neue Sitzung (`syncNewSession`), die neuere setzt sich auf allen Geräten durch. Beim ersten Zuschalten mit eigenen Spieldaten fragt die App und sichert vorher.
+  - Rollen (`setRole`, nur Ansicht): „Schüsse und Bullys“ blendet im Spiel die Aufstellung aus, „Wechsel“ das Schussfeld (Aufstellung immer offen).
+  - Abgleich alle 4 s und 0,8 s nach jeder Änderung. Warnung nach 20 s ohne Verbindung; Erfasstes bleibt lokal und wird nachgeschickt.
+  - Getestet mit zwei App-Instanzen und simuliertem Backend (gleichzeitige Einträge, Löschen gegen Ändern, Wechsel, Offline-Phase, Startseite, Drittelende, Neues Spiel). **Nicht getestet:** echtes Apps Script (Laufzeit, Sperre, Quoten), zwei echte Geräte.
 
 **Getestet** wurde mit simulierten Daten im Browser und mit Node (Syntax, Rechenlogik). **Nicht getestet:** echtes Spiel, echtes Tablet,
 Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie bei beendeten Spielen angenommen), Strafen live.
@@ -100,7 +109,7 @@ Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie 
 8. GitHub-Konto mit Zwei-Faktor-Anmeldung absichern (siehe Fallstricke).
 9. Prüfen, ob die Wake Lock API in der Apps-Script-Web-App (eingebettetes Fenster) auf dem Tablet erlaubt ist. Im Testbrowser wurde sie abgelehnt, dann greift nur der Hinweis.
 10. YouTube-Zeitmarken am ersten echten Spiel prüfen (Genauigkeit der Tore, Schätzung „(ca.)“ bei Strafen, Kopieren in der Web-App). Video: CapCut, Upload YouTube, Aufnahme pro Spiel, Drittelpausen teils geschnitten.
-11. Paket 3: Paralleles Erfassen mit zwei Geräten (ereignisbasierter Abgleich im Backend, Rollen Schüsse/Bullys bzw. Wechsel nur als Voreinstellung). Paket 4: Saisonauswertung und Spielbericht (alle dürfen alles sehen, Ablageort für Spieler offen).
+11. Paket 3 live schalten: `Code.gs` mit `syncExchange` in den Skript-Editor einfügen, speichern, neue Version der bestehenden Bereitstellung (Nutzer). Danach mit zwei echten Geräten testen. Paket 4: Saisonauswertung und Spielbericht (alle dürfen alles sehen, Ablageort für Spieler offen).
 12. Geparkt: Reihe pro Schuss (Reihenwechsel alle 40–60 s, aktuell kein Bedarf).
 
 ---
@@ -140,6 +149,10 @@ Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie 
 - **Saisonmanager:** `401` ohne Schlüssel, kein CORS. Spielernamen sind personenbezogen (es gibt ein Feld `hide_public_last_name`). Daten nur für den Vereinsgebrauch.
 - **Drittelende ist fest Minute 20.** Beendet man ein Drittel im Test früher, zeigt die Auswertung trotzdem 20 Minuten.
 - **Browser-Pane von Claude Code** öffnet lokale Dateien nur als Standbild. Zum Testen eine Kopie mit Ersatzspeicher über einen kleinen lokalen Server ausliefern (`.claude/launch.json`, lokal von Git ausgeschlossen). Wake Lock wird dort abgelehnt, das ist kein Fehler der App.
+- **Gemeinsam erfassen:** Vorbereitung (Kader laden, Aufstellung) auf einem Gerät, das zweite erst danach zuschalten. Lädt jedes Gerät den Stammkader selbst, entstehen verschiedene Spieler-IDs und damit doppelte Spieler.
+  Der Schalter steht im `localStorage`; im Apps-Script-Fenster kann er nach einem Neuladen aus sein. Dann erneut einschalten.
+  Neue Felder im Spielstand sind automatisch geteilt. Gerätebezogene Felder in `SYNC_LOCAL_KEYS` eintragen.
+- **Test zweier Geräte ohne Apps Script:** Eine Testseite mit zwei iframes laden; in jede App-Kopie vor dem Skript einen Ersatz-`localStorage` und ein `window.google` einsetzen, dessen `script.run` an eine Nachbildung von `syncExchange` in der Elternseite geht (mit Verzögerung).
 - **Git** meldet auf Windows „LF will be replaced by CRLF“. Das ist harmlos.
 
 ---
