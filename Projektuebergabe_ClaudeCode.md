@@ -129,6 +129,7 @@ Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie 
     Adresse nicht lesbar und eine gefüllte Liste sperrt alle aus. Geprüft: `testZugriff` zeigt Konto max.woetzel@ und freigegeben, Web-App öffnet für Max
     mit aktiver Liste und Drive verbunden. Tablet-Konto kommt rein, ein nicht freigegebenes Konto wird abgewiesen (von Max geprüft).
     **Offen:** Anmeldung von Paulina und Anja (Schreibweise der Adressen).
+15. **Vorgemerkt (10.11.2026): Penalty-Shot erfassen.** Noch nicht umgesetzt, Details offen (Erfassung, Auswertung, Export, Einfluss auf Schuss- und Zonenstatistik). Vor dem Bau Rückfragen stellen.
 
 ---
 
