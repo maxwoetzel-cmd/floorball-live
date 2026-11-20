@@ -149,6 +149,8 @@ Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie 
     Die Berichtsseite wird in einem unsichtbaren Rahmen (794 px, helle Farben) abschnittsweise mit html2canvas als Bild in ein A4-PDF gesetzt (`pdfRender`: Bausteine werden nicht mitten durchgeschnitten, Seitenzahl unten). **Eingebettete SVG (Schussbilder, Balken) zeichnet html2canvas ohne die Seitenstile leer:** darum ersetzt `svgsToPng` jedes SVG vorher durch ein PNG mit den berechneten Stilen (Fehler vom 20.11.2026: „PDF zeigt nur Text, keine Bilder“). Das PDF ist ein Bild, Text ist nicht markierbar. Ausgabe über das Teilen-Menü (`sharePdfBlob`), sonst Download.
     **Kein Drive-Speichern des PDF:** das Backend `saveFile` nimmt nur Text (für Binär wäre eine Base64-Funktion nötig, neue Version). Rückfall bei Fehler oder ohne Internet: Druckdialog (`printHtml`, „Als PDF speichern“).
     **Nicht getestet:** das echte Nachladen von cdnjs (im Test blockiert, nur mit Attrappen der Bibliotheken geprüft: Seitenaufteilung, Teilen/Download, Rückfall) und das Verhalten im Apps-Script-Fenster auf dem Tablet.
+    Auflösung (20.11.2026, nach „verpixelt“): html2canvas Faktor 3 (`scale:3`), SVG als PNG in 3-facher Größe, Vorschauseiten 1588 × 2246 px (JPEG 0,85), PDF-Bilder JPEG 0,92. Wird das PDF zu groß für den Versand, Faktor senken.
+18. **Am Tablet zu prüfen (alles am 20.11.2026 gebaut, nur in der Testkopie geprüft):** Reihenfarben und Ziffern, automatische „Spieler aus Reihe“, getrennte Alternativen je Special Line, Penalty-Shot, Penalty-Schießen (Wechsel zu Sudden Death), Aufstellung teilen (Text, Seite, PDF), PDF-Erzeugung mit echter Bibliothek (Schussbilder sichtbar? Schärfe? Teilen-Menü?), Spielbericht-PDF.
 
 ---
 
@@ -194,6 +196,10 @@ Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie 
 - **Freigabeliste und Aussperren:** `ALLOWED_USERS` gefüllt = nur diese Konten plus Besitzer. Fehlt das Tablet-Konto, ist am Spieltag niemand am Tablet drin.
   Liest Google die Adresse eines Kontos nicht (Konto außerhalb der Domain), wird es bei gefüllter Liste abgewiesen. Notausgang: Eigenschaft löschen (Max kommt immer hinein).
   `Session.getActiveUser()` liefert die Adresse nur bei Konten derselben Domain wie der Besitzer.
+- **PDF und externe Bibliotheken:** Der PDF-Export hängt an `cdnjs.cloudflare.com` (jsPDF 2.5.1, html2canvas 1.4.1, Versionen fest). Fällt cdnjs aus oder fehlt Internet, bleibt Text und Seite, plus Druckdialog. Neue Versionen nur nach Test einsetzen. In Claude-Code-Tests lässt sich das Nachladen nicht ausführen (Berechtigung blockiert): die Bibliotheken dort durch Attrappen (`window.jspdf`, `window.html2canvas`) ersetzen.
+- **html2canvas und SVG:** Eingebettete SVG werden ohne Seitenstile leer gezeichnet. `svgsToPng` muss sie vorher als PNG ersetzen und dabei Klasse und Lage übernehmen (sonst verrutschen die Feldlinien `.fm-bg`). Neue SVG in Berichten laufen automatisch darüber.
+- **Backend `saveFile` nimmt nur Text:** PDF (Binär) lässt sich nicht nach Drive speichern, nur teilen oder herunterladen. Für Drive wäre eine Base64-Funktion und eine neue Version nötig.
+- **Kader-Namen:** Als Vorname stehen Spitznamen; `findRosterMatch` gleicht bei eindeutigem Nachnamen nur darüber ab. „Als Stammkader speichern“ überschreibt `kader.json` mit dem Kader der App (am 20.11.2026 hat das die Spitznamen einmal zurückgesetzt). Im Zweifel `kader.json` in Drive prüfen.
 - **Git** meldet auf Windows „LF will be replaced by CRLF“. Das ist harmlos.
 
 ---
