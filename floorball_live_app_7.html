@@ -2023,7 +2023,7 @@ function svgsToPng(doc){
         var probe=new win.Image();
         probe.onload=function(){
           try{
-            var cv=doc.createElement('canvas'); cv.width=W*2; cv.height=H*2;
+            var cv=doc.createElement('canvas'); cv.width=W*3; cv.height=H*3;
             cv.getContext('2d').drawImage(probe,0,0,cv.width,cv.height);
             img.src=cv.toDataURL('image/png');
           }catch(e){img.src=probe.src;}
@@ -2044,14 +2044,14 @@ function svgsToPng(doc){
 function pdfRender(frame){
   var doc=frame.contentDocument;
   var pdf=new window.jspdf.jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
-  var M=10, CW=190, PH=297-2*M, y=M, K=794/210, pcs=[], px=null;
-  function pageCv(){var c=document.createElement('canvas'); c.width=794; c.height=1123; var x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,794,1123); pcs.push(c); return x;}
+  var M=10, CW=190, PH=297-2*M, y=M, K=1588/210, pcs=[], px=null; // Vorschauseiten in doppelter Auflösung (1588 x 2246 px)
+  function pageCv(){var c=document.createElement('canvas'); c.width=1588; c.height=2246; var x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,1588,2246); pcs.push(c); return x;}
   px=pageCv();
   function newPage(){pdf.addPage(); y=M; px=pageCv();}
   function mmH(el){return el.offsetWidth?el.offsetHeight*CW/el.offsetWidth:el.offsetHeight*0.26;}
   function place(u){
     if(!u.el.offsetHeight) return Promise.resolve();
-    return window.html2canvas(u.el,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,windowWidth:794}).then(function(cv){
+    return window.html2canvas(u.el,{scale:3,backgroundColor:'#ffffff',useCORS:true,logging:false,windowWidth:794}).then(function(cv){
       var h=cv.height*CW/cv.width;
       if(h<=PH){
         if(y>M&&y+h>M+PH) newPage();
@@ -2082,7 +2082,7 @@ function pdfRender(frame){
   }).then(function(){
     var n=pdf.getNumberOfPages();
     for(var i=1;i<=n;i++){pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(120); pdf.text('Floorball Live · Seite '+i+' von '+n,105,293,{align:'center'});}
-    return {blob:pdf.output('blob'), pages:pcs.map(function(c){return c.toDataURL('image/jpeg',0.6);})};
+    return {blob:pdf.output('blob'), pages:pcs.map(function(c){return c.toDataURL('image/jpeg',0.85);})};
   });
 }
 // PDF teilen (Teilen-Menü) oder herunterladen. Kein Drive-Speichern: das Backend nimmt nur Text an.
