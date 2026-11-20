@@ -366,6 +366,7 @@
           <button type="button" class="team-btn gegner" data-team="Gegner" onclick="setTeam(this)">Gegner (Defense)</button>
         </div>
       </div>
+      <button type="button" onclick="openPenalty()" style="width:100%; margin-bottom:10px; min-height:44px;">Penalty-Shot erfassen</button>
       <p class="view-label" id="view-label">Offense – wir greifen an, Tor oben</p>
       <div class="field-wrap">
         <svg class="field-svg" id="field-svg" viewBox="0 0 440 470" xmlns="http://www.w3.org/2000/svg"></svg>
@@ -513,6 +514,14 @@
   </div>
 </div>
 
+<div id="pen-modal" style="display:none; position:fixed; inset:0; z-index:22; background:rgba(10,12,14,0.99); overflow:auto; padding:12px;">
+  <div style="max-width:720px; margin:0 auto;">
+    <h2 style="margin:0 0 8px; font-size:20px; color:var(--text); text-transform:none; letter-spacing:0;">Penalty-Shot</h2>
+    <div id="pen-body"></div>
+    <div class="row" style="margin-top:14px;"><button type="button" onclick="closePenalty()" style="flex:1;">Abbrechen</button></div>
+  </div>
+</div>
+
 <div id="alt-modal" style="display:none; position:fixed; inset:0; z-index:21; background:rgba(10,12,14,0.99); overflow:auto; padding:12px;">
   <div style="max-width:720px; margin:0 auto;">
     <h2 id="alt-title" style="margin:0 0 4px; font-size:20px; color:var(--text); text-transform:none; letter-spacing:0;">Alternative Aufstellung</h2>
@@ -628,6 +637,7 @@ var teamColor={Wir:'#378add', Gegner:'#d85a30'};
 function isLive(){return state.phase==='play';}
 function computeScore(){var r={Wir:0,Gegner:0}; state.shots.forEach(function(x){if(x.outcome==='Tor') r[x.team]++;}); return r;}
 function zoneLabel(z){
+  if(z==='penalty') return 'Penalty';
   var m=String(z).split('-');
   if(m[0]==='zentral') return {links:'linke Tasche (Halbfeld)',mitte:'zentrales Halbfeld',rechts:'rechte Tasche (Halbfeld)'}[m[1]]||'Halbfeld';
   var r={tornah:'Kurzdistanz',fern:'Langdistanz'}[m[0]]||m[0];
@@ -851,7 +861,7 @@ function shotMarkerSvg(cx,cy,outcome,col){
 // Schussbild einer Mannschaft (Offense = unsere Schüsse, Defense = Schüsse des Gegners) mit Anzahl je Zone
 function fieldSummarySvg(team,shots){
   var orientation=team==='Wir'?'offense':'defense', rows=team==='Wir'?ZONE_ROWS_OFF:ZONE_ROWS_DEF;
-  var mine=shots.filter(function(x){return x.team===team;}), counts={}, parts=[fieldBaseSvg(orientation), zoneRowLabels(rows)];
+  var mine=shots.filter(function(x){return x.team===team&&!x.pen;}), counts={}, parts=[fieldBaseSvg(orientation), zoneRowLabels(rows)];
   mine.forEach(function(x){var c=counts[x.zone]||(counts[x.zone]={n:0,g:0}); c.n++; if(x.outcome==='Tor') c.g++;});
   mine.forEach(function(x){
     var z=x.zone.split('-'), col=ZONE_COLS.find(function(c){return c.key===z[1];}), rw=rows.find(function(r){return r.key===z[0];});
@@ -899,9 +909,11 @@ function miniStatsHtml(period){
   var en=shotsOf(period).filter(function(x){return x.emptyNet;});
   var enU=en.filter(function(x){return x.team==='Wir';}), enG=en.filter(function(x){return x.team==='Gegner';});
   function goals(l){return l.filter(function(x){return x.outcome==='Tor';}).length;}
+  var pn=shotsOf(period).filter(function(x){return x.pen;}), pnU=pn.filter(function(x){return x.team==='Wir';}), pnG=pn.filter(function(x){return x.team==='Gegner';});
   return '<table><tr><th></th><th>Anzahl</th><th>Erfolgreich</th><th>Tore</th><th>Gegentore</th></tr>'+row('Überzahl',agg('Überzahl'))+row('Unterzahl',agg('Unterzahl'))+'</table>'+
     '<p class="muted" style="margin:8px 0 0;">'+
-    (en.length?'Empty Net: wir '+enU.length+' Schüsse ('+goals(enU)+' Tore), Gegner '+enG.length+' ('+goals(enG)+' Tore)':'')+'</p>';
+    (en.length?'Empty Net: wir '+enU.length+' Schüsse ('+goals(enU)+' Tore), Gegner '+enG.length+' ('+goals(enG)+' Tore)':'')+'</p>'+
+    (pn.length?'<h3 style="margin-top:14px;">Penalty</h3>'+penaltyTableHtml(pn,state):'');
 }
 function bullyTableHtml(period){
   var idx=PERIODS.indexOf(state.period), upto=PERIODS.slice(0,idx+1), plist=period?[period]:upto;
@@ -1354,6 +1366,53 @@ function confirmShot(outcome){
   try{ if(navigator.vibrate) navigator.vibrate(30); }catch(e){}
   showToast((shot.team==='Gegner'?oppName():usName())+': '+outcome);
 }
+/* ---------- Penalty-Shot ---------- */
+function penShooterName(st,id){
+  var p=((st&&st.roster)||[]).find(function(r){return r.id===id;}); if(!p) return '';
+  return (p.nr?p.nr+' ':'')+(p.first||p.name||'');
+}
+function penaltyTableHtml(pen,st){
+  function row(team){
+    var l=pen.filter(function(x){return x.team===team;}); if(!l.length) return '';
+    var g=l.filter(function(x){return x.outcome==='Tor';}).length, sv=l.filter(function(x){return x.outcome==='Aufs Tor';}).length, mi=l.filter(function(x){return x.outcome==='Daneben';}).length;
+    var who=l.filter(function(x){return x.shooterId!=null;}).map(function(x){return esc(penShooterName(st,x.shooterId))+' ('+({Tor:'Tor','Aufs Tor':'gehalten',Daneben:'daneben'}[x.outcome]||x.outcome)+')';}).join(', ');
+    return '<tr><td>'+esc(team==='Wir'?usName():oppName())+'</td><td>'+l.length+'</td><td>'+g+'</td><td>'+sv+'</td><td>'+mi+'</td><td>'+(who||'–')+'</td></tr>';
+  }
+  return '<table><tr><th></th><th>Anzahl</th><th>Tore</th><th>Gehalten</th><th>Daneben</th><th>Schützen</th></tr>'+row('Wir')+row('Gegner')+'</table>';
+}
+var penTeam='Wir', penShooter=null;
+function openPenalty(){
+  penTeam=state.currentTeam; penShooter=null; renderPenalty();
+  document.getElementById('pen-modal').style.display='block';
+}
+function closePenalty(){document.getElementById('pen-modal').style.display='none';}
+function setPenTeam(t){penTeam=t; penShooter=null; renderPenalty();}
+function setPenShooter(id){penShooter=(penShooter===id?null:id); renderPenalty();}
+function renderPenalty(){
+  var h='<div class="seg" style="margin-bottom:10px;"><button type="button" class="team-btn'+(penTeam==='Wir'?' active':'')+'" onclick="setPenTeam(\'Wir\')">'+esc(usName())+' schießt</button>'+
+    '<button type="button" class="team-btn gegner'+(penTeam==='Gegner'?' active':'')+'" onclick="setPenTeam(\'Gegner\')">'+esc(oppName())+' schießt</button></div>';
+  if(penTeam==='Wir'){
+    var list=sortByNr(state.roster.filter(function(q){return q.present&&!q.isGoalie;}));
+    h+='<p class="muted" style="margin:0 0 4px;">Schütze (optional)</p><div class="chip-grid">'+
+      (list.length?list.map(function(q){return '<span class="pick-chip'+(penShooter===q.id?' active':'')+'" style="'+(penShooter===q.id?'background:var(--wir); color:#fff;':'')+'" onclick="setPenShooter('+q.id+')">'+esc((q.nr?q.nr+' ':'')+shownName(q))+'</span>';}).join(' '):'<span class="muted">Keine Anwesenden.</span>')+'</div>';
+  } else h+='<p class="muted" style="margin:0 0 4px;">Der Torwart wird automatisch zugeordnet.</p>';
+  h+='<p class="muted" style="margin:14px 0 6px;">Ergebnis</p><div class="row">'+
+    '<button type="button" class="primary" onclick="confirmPenalty(\'Tor\')" style="flex:1;">Tor</button>'+
+    '<button type="button" onclick="confirmPenalty(\'Aufs Tor\')" style="flex:1;">Gehalten</button>'+
+    '<button type="button" onclick="confirmPenalty(\'Daneben\')" style="flex:1;">Daneben</button></div>';
+  document.getElementById('pen-body').innerHTML=h;
+}
+function confirmPenalty(outcome){
+  var onIds=state.roster.filter(function(q){return q.onField;}).map(function(q){return q.id;});
+  var shot={id:newId(), dev:SYNC_DEV, period:state.period, team:penTeam, zone:'penalty', pen:true, outcome:outcome, minute:curMinute(), ts:Date.now(), onFieldIds:onIds};
+  if(penTeam==='Wir'&&penShooter!=null) shot.shooterId=penShooter;
+  if(penTeam==='Gegner') shot.goalieId=activeGoalieId();
+  state.shots.push(shot);
+  closePenalty();
+  save(); renderShots(); renderStats(); renderPlaytimes(); renderEvents();
+  try{ if(navigator.vibrate) navigator.vibrate(30); }catch(e){}
+  showToast('Penalty '+(penTeam==='Gegner'?oppName():usName())+': '+({Tor:'Tor','Aufs Tor':'gehalten',Daneben:'daneben'}[outcome]));
+}
 function cancelShot(){state.pendingZone=null; document.getElementById('outcome-bar').classList.remove('show'); renderShots();}
 function undoLastShot(){var s=lastOwn(state.shots); if(!s)return; state.shots=state.shots.filter(function(x){return x!==s;}); save(); renderShots(); renderStats(); renderPlaytimes(); renderEvents();}
 function zoneCenterForCurrentView(zoneName){
@@ -1434,6 +1493,7 @@ function renderStats(){
     if(s.outcome==='Tor') totals[s.team].goals++;
     if(!byPeriod[s.period]) byPeriod[s.period]={Wir:0,Gegner:0};
     if(s.outcome==='Tor') byPeriod[s.period][s.team]++;
+    if(s.pen) return; // Penalty hat keine Zone
     var zkey=(s.team==='Wir'?'Off ':'Def ')+s.zone;
     if(!byZone[zkey]) byZone[zkey]={Wir:0,Gegner:0};
     byZone[zkey][s.team]++;
@@ -1551,7 +1611,7 @@ function renderEvents(){
     var what, sel;
     if(k==='shot'){
       var col=teamColor[o.team]||'#888';
-      what='<span class="ev-dot" style="background:'+col+';"></span>'+esc(o.team==='Wir'?usName():oppName())+' · '+esc(zoneLabel(o.zone))+(o.emptyNet?' · EN':'');
+      what='<span class="ev-dot" style="background:'+col+';"></span>'+esc(o.team==='Wir'?usName():oppName())+' · '+esc(zoneLabel(o.zone))+(o.shooterId!=null?' · '+esc(penShooterName(state,o.shooterId)):'')+(o.emptyNet?' · EN':'');
       sel='<select onchange="setShotOutcome('+o.id+',this.value)" aria-label="Ergebnis">'+['Tor','Aufs Tor','Daneben'].map(function(v){return '<option'+(v===o.outcome?' selected':'')+'>'+v+'</option>';}).join('')+'</select>';
     } else {
       what='Bully';
@@ -1633,7 +1693,7 @@ function videoMarks(){
     sc[s.team]++;
     if(offs[s.period]==null||!starts[s.period]) return;
     if(!s.ts){noTs++; return;}
-    var lbl=(s.team==='Wir'?'Tor '+usName():'Gegentor')+' · '+sc.Wir+':'+sc.Gegner+(s.emptyNet?' (Empty Net)':'');
+    var lbl=(s.team==='Wir'?'Tor '+usName():'Gegentor')+' · '+sc.Wir+':'+sc.Gegner+(s.emptyNet?' (Empty Net)':'')+(s.pen?' (Penalty'+(s.shooterId!=null?', '+penShooterName(state,s.shooterId):'')+')':'');
     marks.push({sec:vt(s.period,s.ts), label:lbl, order:1});
   });
   state.specials.forEach(function(sp){
@@ -1726,7 +1786,7 @@ function goalTimelineHtml(s){
     return (PERIODS.indexOf(a.period)-PERIODS.indexOf(b.period))||((a.minute||0)-(b.minute||0))||((a.ts||a.id)-(b.ts||b.id));
   }).map(function(x){
     sc[x.team]++;
-    return '<tr><td>'+esc(x.period)+'</td><td>'+(x.minute==null?'':x.minute)+'</td><td>'+(x.team==='Wir'?'Tor '+esc(s.teamUs||'Wir'):'Gegentor')+(x.emptyNet?' (Empty Net)':'')+'</td><td>'+sc.Wir+':'+sc.Gegner+'</td><td>'+esc(zoneLabel(x.zone))+'</td></tr>';
+    return '<tr><td>'+esc(x.period)+'</td><td>'+(x.minute==null?'':x.minute)+'</td><td>'+(x.team==='Wir'?'Tor '+esc(s.teamUs||'Wir'):'Gegentor')+(x.emptyNet?' (Empty Net)':'')+'</td><td>'+sc.Wir+':'+sc.Gegner+'</td><td>'+esc(zoneLabel(x.zone))+(x.shooterId!=null?' · '+esc(penShooterName(s,x.shooterId)):'')+'</td></tr>';
   }).join('');
   return '<table><tr><th>Drittel</th><th>Min</th><th>Ereignis</th><th>Stand</th><th>Zone</th></tr>'+(rows||'<tr><td colspan="5" class="muted">Keine Tore.</td></tr>')+'</table>';
 }
@@ -1816,13 +1876,16 @@ function seasonReportHtml(games){
     ['bw','bn','ppN','ppG','ppOk','pkN','pkGA','pkOk'].forEach(function(k){sum[k]+=x[k];});
   });
   // Torquote je Zone (beide Teams) als Grundlage für erwartete Tore; kleine Stichproben zur Gesamtquote hin geglättet
-  var zr={}, totS=all.length, totG=all.filter(function(x){return x.outcome==='Tor';}).length, R=totS?totG/totS:0;
-  all.forEach(function(x){var z=zr[x.zone]||(zr[x.zone]={n:0,g:0}); z.n++; if(x.outcome==='Tor') z.g++;});
-  function xg(shots){return shots.reduce(function(a,x){var z=zr[x.zone]||{n:0,g:0}; return a+(z.g+5*R)/(z.n+5);},0);}
+  var allZ=all.filter(function(x){return !x.pen;}); // Penalty hat keine Zone
+  var zr={}, totS=allZ.length, totG=allZ.filter(function(x){return x.outcome==='Tor';}).length, R=totS?totG/totS:0;
+  allZ.forEach(function(x){var z=zr[x.zone]||(zr[x.zone]={n:0,g:0}); z.n++; if(x.outcome==='Tor') z.g++;});
+  function xg(shots){return shots.reduce(function(a,x){if(x.pen) return a; var z=zr[x.zone]||{n:0,g:0}; return a+(z.g+5*R)/(z.n+5);},0);}
+  var pnAll=all.filter(function(x){return x.pen;});
+  function pnc(team){var l=pnAll.filter(function(x){return x.team===team;}); return l.filter(function(x){return x.outcome==='Tor';}).length+' / '+l.length;}
   var h='<h3>Überblick</h3><div class="rp-kpis">'+
     [['Spiele',games.length],['Siege · Remis · Niederlagen',win+' · '+draw+' · '+loss],['Tore',sum.gf+' : '+sum.ga],['Schüsse',sum.sf+' : '+sum.sa],
      ['Schussquote',pctTxt(sum.gf,sum.sf)],['Fangquote',pctTxt(sum.aa-sum.ga,sum.aa)],['Bully',pctTxt(sum.bw,sum.bn)],
-     ['Überzahl (Tore/Anzahl)',sum.ppG+' / '+sum.ppN],['Unterzahl ohne Gegentor',pctTxt(sum.pkOk,sum.pkN)]].map(function(k){return '<div class="rp-kpi"><b>'+esc(k[1])+'</b><span>'+esc(k[0])+'</span></div>';}).join('')+'</div>';
+     ['Überzahl (Tore/Anzahl)',sum.ppG+' / '+sum.ppN],['Unterzahl ohne Gegentor',pctTxt(sum.pkOk,sum.pkN)],['Penalty wir (Tore/Anzahl)',pnc('Wir')],['Penalty Gegner (Tore/Anzahl)',pnc('Gegner')]].map(function(k){return '<div class="rp-kpi"><b>'+esc(k[1])+'</b><span>'+esc(k[0])+'</span></div>';}).join('')+'</div>';
   h+='<h3 style="margin-top:14px;">Spiele</h3>'+seasonBarsSvg(games,function(g){return g.tot.t.Wir.g;},function(g){return g.tot.t.Gegner.g;},'Tore je Spiel')+
     seasonBarsSvg(games,function(g){return g.tot.t.Wir.s;},function(g){return g.tot.t.Gegner.s;},'Schüsse je Spiel');
   h+='<div class="rp-scroll"><table><tr><th>Datum</th><th>Gegner</th><th>Ergebnis</th><th>Schüsse</th><th>aufs Tor</th><th>Schussquote</th><th>Erw. Tore</th><th>Bully</th><th>ÜZ</th><th>UZ</th></tr>'+
@@ -2631,9 +2694,9 @@ function saveFile(blob,filename){
   return Promise.resolve(true);
 }
 function downloadShotsCsv(){
-  var rows=[['Spiel','Drittel','Minute','Team','Ansicht','Zone','Ergebnis','Empty Net','Uhrzeit']];
+  var rows=[['Spiel','Drittel','Minute','Team','Ansicht','Zone','Ergebnis','Empty Net','Uhrzeit','Penalty','Schütze']];
   var match=usName()+' vs '+oppName();
-  state.shots.forEach(function(s){rows.push([match, s.period, s.minute==null?'':s.minute, s.team==='Wir'?usName():oppName(), s.team==='Wir'?'Offense':'Defense', zoneLabel(s.zone), s.outcome, s.emptyNet?'ja':'', fmtClock(s.ts)]);});
+  state.shots.forEach(function(s){rows.push([match, s.period, s.minute==null?'':s.minute, s.team==='Wir'?usName():oppName(), s.team==='Wir'?'Offense':'Defense', zoneLabel(s.zone), s.outcome, s.emptyNet?'ja':'', fmtClock(s.ts), s.pen?'ja':'', s.shooterId!=null?penShooterName(state,s.shooterId):'']);});
   downloadCsv('floorball_schuesse.csv',rows);
 }
 function downloadSpecialCsv(){

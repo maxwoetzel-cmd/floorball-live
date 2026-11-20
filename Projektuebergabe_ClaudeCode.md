@@ -135,7 +135,10 @@ Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie 
     Adresse nicht lesbar und eine gefüllte Liste sperrt alle aus. Geprüft: `testZugriff` zeigt Konto max.woetzel@ und freigegeben, Web-App öffnet für Max
     mit aktiver Liste und Drive verbunden. Tablet-Konto kommt rein, ein nicht freigegebenes Konto wird abgewiesen (von Max geprüft).
     **Offen:** Anmeldung von Paulina und Anja (Schreibweise der Adressen).
-15. **Vorgemerkt (10.11.2026): Penalty-Shot erfassen.** Noch nicht umgesetzt, Details offen (Erfassung, Auswertung, Export, Einfluss auf Schuss- und Zonenstatistik). Vor dem Bau Rückfragen stellen.
+15. **Penalty-Shot (während des Spiels) umgesetzt (20.11.2026).** Knopf „Penalty-Shot erfassen“ im Abschnitt Schuss erfassen, Dialog `#pen-modal` (Team, Schütze optional nur für unser Team, Ergebnis Tor/Gehalten/Daneben).
+    Gespeichert als Schuss in `state.shots` mit `pen:true`, `zone:'penalty'`, optional `shooterId`; Gegner-Penalty bekommt `goalieId` (`activeGoalieId`). Zählt bei Tore, Schüsse, aufs Tor, Torhüterquote, Spielstand;
+    **nicht** in Schussbild, Zonenstatistik, Torquote je Zone und erwartete Tore (Filter `!x.pen`). Taucht auf in Ereignisliste, Torfolge, Auswertung (Abschnitt „Penalty“ in `miniStatsHtml`), Spielbericht, CSV (Spalten Penalty, Schütze),
+    YouTube-Zeitmarken („(Penalty, Schütze)“) und Saisonauswertung (zwei Kennzahlen). **Offen: Penalty-Schießen nach Verlängerung** (Format noch zu klären, eigene Serie, nicht in Tore/Quote).
 
 ---
 
