@@ -515,8 +515,8 @@
 
 <div id="alt-modal" style="display:none; position:fixed; inset:0; z-index:21; background:rgba(10,12,14,0.99); overflow:auto; padding:12px;">
   <div style="max-width:720px; margin:0 auto;">
-    <h2 style="margin:0 0 4px; font-size:20px; color:var(--text); text-transform:none; letter-spacing:0;">Alternative Aufstellung</h2>
-    <p class="muted" style="margin:0 0 8px;">Gilt für Überzahl und Unterzahl, wenn dort "Alternative Aufstellung" als Danach gewählt ist.</p>
+    <h2 id="alt-title" style="margin:0 0 4px; font-size:20px; color:var(--text); text-transform:none; letter-spacing:0;">Alternative Aufstellung</h2>
+    <p class="muted" style="margin:0 0 8px;">Gilt nur für diese Special Line. Überzahl, Unterzahl 1 und Unterzahl 2 haben je eine eigene.</p>
     <div id="alt-body"></div>
     <div class="row" style="margin-top:12px;">
       <button type="button" class="primary" onclick="altSave()" style="flex:1;">Speichern</button>
@@ -543,7 +543,7 @@ var FM={
 };
 // Lage der Positionen in Prozent (nach den Skizzen: Überzahl mit Tor oben, Unterzahl mit Tor unten)
 var FM_POS={pp:{1:[16,36],2:[16,88],3:[50,62],4:[84,72],5:[52,90]}, uz:{1:[63,61],2:[37,61],3:[50,40],4:[58,15]}};
-function newFm(){return {PP:{s:{},next:'L1'}, U1:{s:{},next:'L1'}, U2:{s:{},next:'L1'}, ALT:{s:{},next:''}};}
+function newFm(){return {PP:{s:{},next:'L1',alt:{}}, U1:{s:{},next:'L1',alt:{}}, U2:{s:{},next:'L1',alt:{}}, ALT:{s:{},next:''}};}
 function isFm(line){return line==='PP'||line==='U1'||line==='U2'||line==='ALT';}
 function emptyLineup(){return {goalie:null, extra:null, lines:[emptyLine(),emptyLine(),emptyLine()], fm:newFm()};}
 function ensureFm(){
@@ -555,6 +555,13 @@ function ensureFm(){
     // "Danach": 1./2./3. Reihe oder Alternative Aufstellung
     if(k!=='ALT' && ['L1','L2','L3','ALT'].indexOf(state.lineup.fm[k].next)===-1) state.lineup.fm[k].next='L1';
   });
+  // Jede Special Line hat ihre eigene Alternative Aufstellung (fm[k].alt). Ältere Stände hatten eine gemeinsame (fm.ALT.s): einmal in alle drei kopieren.
+  var mig=false;
+  ['PP','U1','U2'].forEach(function(k){
+    var c=state.lineup.fm[k];
+    if(!c.alt||typeof c.alt!=='object'){c.alt=JSON.parse(JSON.stringify(state.lineup.fm.ALT.s||{})); mig=true;}
+  });
+  if(mig) state.lineup.fm.ALT.s={};
 }
 
 var state={
@@ -749,8 +756,11 @@ function prepSummaryHtml(){
   });
   ensureFm();
   Object.keys(FM).forEach(function(k){
+    if(k==='ALT') return; // die Alternative steht bei der jeweiligen Special Line
     var names=[]; for(var i=1;i<=FM[k].n;i++){var pid=state.lineup.fm[k].s[i]; names.push(FM[k].names[i]+': '+(pid!=null?nm(pid):'–'));}
-    h+='<tr><td>'+esc(fmFull(k))+'</td><td>'+names.join(' · ')+(k==='ALT'?'':'<br><span class="muted">Danach: '+(nextLabel(state.lineup.fm[k].next)||'–')+'</span>')+'</td></tr>';
+    var nx=state.lineup.fm[k].next, alt='';
+    if(nx==='ALT'){var al=state.lineup.fm[k].alt||{}; alt=' (Sturm: '+[1,2,3].map(function(i){return al[i]!=null?nm(al[i]):'–';}).join(' · ')+'; Abwehr: '+[4,5].map(function(i){return al[i]!=null?nm(al[i]):'–';}).join(' · ')+')';}
+    h+='<tr><td>'+esc(fmFull(k))+'</td><td>'+names.join(' · ')+'<br><span class="muted">Danach: '+(nextLabel(nx)||'–')+alt+'</span></td></tr>';
   });
   h+='</table>';
   if(empty) h+='<p class="muted" style="margin:8px 0 0;">'+empty+' von 15 Plätzen sind leer. Das ist in Ordnung, wenn weniger Reihen spielen.</p>';
@@ -1079,8 +1089,10 @@ function fmNextHtml(key){
 var altSel=null, altSnapshot='', altKey='', altPrevNext='';
 function openAltEditor(key){
   ensureFm(); altKey=key; altPrevNext=state.lineup.fm[key].next||'L1';
+  state.lineup.fm.ALT.s=JSON.parse(JSON.stringify(state.lineup.fm[key].alt||{})); // Arbeitskopie der Alternative dieser Special Line
   altSnapshot=JSON.stringify(state.lineup.fm.ALT.s); altSel=null;
   state.lineup.fm[key].next='ALT';
+  document.getElementById('alt-title').textContent='Alternative Aufstellung: '+fmName(key);
   renderAltModal(); document.getElementById('alt-modal').style.display='block';
 }
 function renderAltModal(){
@@ -1102,11 +1114,13 @@ function altSlot(i){altSel=i; renderAltModal();}
 function altSet(pid){ensureFm(); state.lineup.fm.ALT.s[altSel]=pid; altSel=null; renderAltModal();}
 function altClear(){ensureFm(); delete state.lineup.fm.ALT.s[altSel]; altSel=null; renderAltModal();}
 function altSave(){
+  ensureFm(); if(altKey&&state.lineup.fm[altKey]) state.lineup.fm[altKey].alt=JSON.parse(JSON.stringify(state.lineup.fm.ALT.s));
+  state.lineup.fm.ALT.s={};
   document.getElementById('alt-modal').style.display='none'; altSel=null;
   save(); renderLineup(); renderPrepExtras(); showToast('Alternative Aufstellung gespeichert');
 }
 function altCancel(){
-  ensureFm(); state.lineup.fm.ALT.s=JSON.parse(altSnapshot||'{}'); if(altKey) state.lineup.fm[altKey].next=altPrevNext;
+  ensureFm(); state.lineup.fm.ALT.s={}; if(altKey) state.lineup.fm[altKey].next=altPrevNext;
   document.getElementById('alt-modal').style.display='none'; altSel=null; renderLineup();
 }
 function setFmNext(key,val){ensureFm(); state.lineup.fm[key].next=val; save(); renderLineup();}
@@ -1116,8 +1130,8 @@ function lineNamesHtml(i){
   return 'Sturm: '+[l.OL,l.C,l.OR].map(nm).join(' · ')+'<br>Abwehr: '+[l.DL,l.DR].map(nm).join(' · ');
 }
 // Vollbild-Ansicht zum Ansagen der Formation im Spiel
-function altNamesHtml(){
-  ensureFm(); var a=state.lineup.fm.ALT.s;
+function altNamesHtml(key){
+  ensureFm(); var a=(state.lineup.fm[key]&&state.lineup.fm[key].alt)||{};
   function nm(i){var p=a[i]!=null?playerById(a[i]):null; return p?esc((p.nr?p.nr+' ':'')+shownName(p)):'–';}
   return 'Sturm: '+[1,2,3].map(nm).join(' · ')+'<br>Abwehr: '+[4,5].map(nm).join(' · ');
 }
@@ -1128,7 +1142,7 @@ function showFormation(key){
   if(nx){
     body+='<div style="margin-top:10px; padding:10px 12px; background:var(--panel); border-radius:10px; color:var(--text);"><b>Danach: '+nextLabel(nx)+'</b>';
     if(nx.charAt(0)==='L') body+='<br><span style="font-size:15px; color:var(--text-secondary);">'+lineNamesHtml(parseInt(nx.charAt(1),10)-1)+'</span>';
-    else if(nx==='ALT') body+='<br><span style="font-size:15px; color:var(--text-secondary);">'+altNamesHtml()+'</span>';
+    else if(nx==='ALT') body+='<br><span style="font-size:15px; color:var(--text-secondary);">'+altNamesHtml(key)+'</span>';
     else body+=' <button type="button" style="margin-left:8px;" onclick="showFormation(\''+nx+'\')">Anzeigen ›</button>';
     body+='</div>';
   } else body+='<p class="muted" style="margin-top:8px;">Kein "Danach" festgelegt.</p>';
@@ -2117,7 +2131,8 @@ function togglePresent(id){
 function removeFromLineup(id){
   if(state.lineup.goalie===id) state.lineup.goalie=null;
   if(state.lineup.extra===id) state.lineup.extra=null;
-  ensureFm(); Object.keys(FM).forEach(function(k){Object.keys(state.lineup.fm[k].s).forEach(function(i){if(state.lineup.fm[k].s[i]===id) delete state.lineup.fm[k].s[i];});});
+  ensureFm(); Object.keys(FM).forEach(function(k){Object.keys(state.lineup.fm[k].s).forEach(function(i){if(state.lineup.fm[k].s[i]===id) delete state.lineup.fm[k].s[i];});
+    var al=state.lineup.fm[k].alt; if(al) Object.keys(al).forEach(function(i){if(al[i]===id) delete al[i];});});
   state.lineup.lines.forEach(function(line){POS_KEYS.forEach(function(k){if(line[k]===id)line[k]=null;});});
 }
 function findSlotOf(id){

@@ -54,9 +54,10 @@ Verantwortlich: Max Woetzel (Head-Coach Herren).
   mit Altdaten sichert die App erst den alten Stand und löscht dann (`beginGame`/`resetGameData`), damit sich Zeiten nicht überlagern.
 - **Über-/Unterzahl kommt aus den Strafen** (`deriveSpecials`, jede Minute im laufenden Drittel, beim Drittel- und Spielende).
   Zwei-Minuten-Strafen enden beim Tor, gleichzeitige Strafen beider Teams ergeben keinen Abschnitt. Manuelle Eingabe nur als Notfall.
-- **Formationen** (Überzahl, Unterzahl 1/2, eine gemeinsame Alternative Aufstellung) dienen **nur zum Ansagen**. Sie liegen getrennt
+- **Formationen** (Überzahl, Unterzahl 1/2, je eine eigene Alternative Aufstellung) dienen **nur zum Ansagen**. Sie liegen getrennt
   von den Reihen und lösen keine Spielzeit aus. Name (Stift ✎), „Spieler aus Reihe“ und „Danach“ (1./2./3. Reihe oder Alternative) sind einstellbar.
-  Beim Eingeben der Alternativen Aufstellung (`renderAltModal`) werden die Spieler der Special Line, von der aus sie geöffnet wurde (`altKey`), nicht zur Auswahl angeboten. Da es nur **eine** Alternative gibt, gilt der Ausschluss je nach Aufruf für Überzahl oder Unterzahl 1/2; bereits eingetragene Spieler bleiben.
+  Beim Eingeben der Alternativen Aufstellung (`renderAltModal`) werden die Spieler der Special Line, von der aus sie geöffnet wurde (`altKey`), nicht zur Auswahl angeboten. Bereits eingetragene Spieler bleiben.
+  **Seit 20.11.2026 hat jede Special Line ihre eigene Alternative** (`fm[PP|U1|U2].alt`, Karte der Plätze wie `fm.ALT.s`). `fm.ALT.s` ist nur die Arbeitskopie des Editors (`openAltEditor`, `altSave`, `altCancel`) und sonst leer. Ältere Stände mit gemeinsamer Alternative werden in `ensureFm` einmal in alle drei kopiert. `removeFromLineup` räumt auch die Alternativen.
 - **Aufstellung bedienen:** Reihenname antippen → mögliche Spieler direkt darunter (antippen = freier Platz). Position antippen →
   Auswahlliste am Platz. Tor-Platz nur Torhüter, alle anderen Plätze nur Feldspieler, jeweils nach Trikotnummer sortiert.
 - **Reihenfarben** (20.11.2026): Reihe I blau, II grün, III orange (`.lc1`–`.lc3`, `--lc`). Ein Spieler trägt die Farbe der Reihe I–III, in der er steht, auch in Special Lines,
@@ -119,7 +120,7 @@ Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie 
 1. Test auf dem Android-Tablet und an einem echten Spiel (Bildschirmplatz im Querformat, Größe der Knöpfe, Auswertung in der Pause).
 2. Rückmeldungen der Tester auswerten (Testanleitung, Punkt 12).
 3. Auswechselbank steht seit 20.11.2026 direkt unter der 3. Reihe, davor kommen die Special Lines (`renderLineup`, `#bench-info` wird dort erzeugt). Kann entfallen, wenn sie nicht gebraucht wird.
-4. Nur **eine** Alternative Aufstellung für alle Formationen. Brauchen Überzahl und Unterzahl verschiedene, erweitern.
+4. Erledigt (20.11.2026): Überzahl, Unterzahl 1 und 2 haben je eine eigene Alternative Aufstellung.
 5. Kader: Schlunk (79) und Zeipelt (45) sind eingetragen. Gibt es weitere Spieler im Stammkader, in `kader.json` ergänzen.
 6. Optional: Spielzeit je Drittel mit eingestellter Minute statt fest 20 (bewusst abgelehnt, bleibt bei 20).
 7. Optional: Zusammenfassung als Datei (PDF/HTML) in Drive ablegen.
