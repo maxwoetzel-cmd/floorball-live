@@ -61,7 +61,7 @@ Verantwortlich: Max Woetzel (Head-Coach Herren).
   Auswahlliste am Platz. Tor-Platz nur Torhüter, alle anderen Plätze nur Feldspieler, jeweils nach Trikotnummer sortiert.
 - **Reihenfarben** (20.11.2026): Reihe I blau, II grün, III orange (`.lc1`–`.lc3`, `--lc`). Ein Spieler trägt die Farbe der Reihe I–III, in der er steht, auch in Special Lines,
   Alternativer Aufstellung, Auswahllisten, Slot-Menü und Bank (`lineIdxOf`, `lcCls`, `lcBadge` mit Zusatz I/II/III). Ohne Reihe bleibt es neutral (Torwart, Bank-Spieler, Spieler nur in Special Line).
-  Darstellung: weißer Platz mit 4 px Farbrahmen (so von Max gewählt, Fläche und Umschalter wurden wieder entfernt). Auch die Knöpfe „Spieler aus Reihe: 1 2 3“ tragen die Reihenfarbe (`.lcbtn`). Gilt im Spiel genauso (gleiche Renderfunktionen).
+  Darstellung: weißer Platz mit 4 px Farbrahmen (so von Max gewählt, Fläche und Umschalter wurden wieder entfernt). Auch die Knöpfe „Spieler aus Reihe: 1 2 3“ tragen die Reihenfarbe (`.lcbtn`). Sie sind seit 20.11.2026 **automatisch** (`fmFromLines`: Reihen I–III der Spieler in der Special Line) und nicht mehr antippbar; der alte manuelle Wert `fm[k].from` im Spielstand wird nicht mehr genutzt. Der Titel („· aus Reihe 1+2“) kommt ebenfalls daraus. Gilt im Spiel genauso (gleiche Renderfunktionen).
 - **Vornamen** werden überall angezeigt (bei gleichem Vornamen mit Initial des Nachnamens). **Kein Plus/Minus.**
 - **Zonen** heißen Kurzdistanz, Halbfeld (linke Tasche, zentrales Halbfeld, rechte Tasche) und Langdistanz. Daten bleiben als `tornah/zentral/fern`.
 

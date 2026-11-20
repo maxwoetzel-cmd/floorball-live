@@ -186,6 +186,7 @@
   .lcc{background:#fff !important; color:#14181b !important; border:4px solid var(--lc) !important;}
   .lcb{font-style:normal; font-size:10px; font-weight:800; margin-left:5px; padding:0 4px; border-radius:4px; background:var(--lc); color:#14181b; vertical-align:middle;}
   .fm-next button.lcbtn{border:3px solid var(--lc) !important;}
+  .fm-next button.lcauto{pointer-events:none; cursor:default;}
   .fm-next button.lcbtn.active{background:var(--lc) !important; color:#14181b !important;}
   .pool{background:rgba(0,0,0,0.22); border-radius:10px; padding:8px 10px; margin-top:10px;}
   .pool-title{font-size:12px; color:#fff; opacity:0.85;}
@@ -1008,7 +1009,13 @@ function updateSmPolling(){
 /* ---------- Sonderformationen: Überzahl, Unterzahl 1/2 (zum Ansagen) ---------- */
 var fmEditing='';
 function fmName(key){ensureFm(); var c=state.lineup.fm[key]; return (c.label&&c.label.trim())||FM[key].title;}
-function fmFull(key){ensureFm(); var fr=(state.lineup.fm[key].from||[]).slice().sort(); return fmName(key)+(fr.length?' · aus Reihe '+fr.join('+'):'');}
+// Aus welchen Reihen (1-3) die Spieler der Formation stehen, automatisch aus der Aufstellung
+function fmFromLines(key){
+  ensureFm(); var sp=state.lineup.fm[key].s, out=[];
+  Object.keys(sp).forEach(function(k){var i=lineIdxOf(sp[k]); if(i>=0&&out.indexOf(i+1)===-1) out.push(i+1);});
+  return out.sort();
+}
+function fmFull(key){ensureFm(); var fr=fmFromLines(key); return fmName(key)+(fr.length?' · aus Reihe '+fr.join('+'):'');}
 function fmCardHead(key){
   var h='<p class="line-title">';
   if(fmEditing===key){
@@ -1022,15 +1029,10 @@ function editFmLabel(key){fmEditing=key; renderLineup(); var i=document.getEleme
 function saveFmLabel(key){var i=document.getElementById('fm-label-input'); state.lineup.fm[key].label=i?i.value.trim():''; fmEditing=''; save(); renderLineup();}
 function resetFmLabel(key){state.lineup.fm[key].label=''; fmEditing=''; save(); renderLineup();}
 function fmFromHtml(key){
-  var fr=state.lineup.fm[key].from||[];
+  var fr=fmFromLines(key);
   return '<div class="fm-next"><span>Spieler aus Reihe:</span>'+[1,2,3].map(function(n){
-    return '<button type="button" class="lc'+n+' lcbtn'+(fr.indexOf(n)!==-1?' active':'')+'" onclick="toggleFmFrom(\''+key+'\','+n+')">'+n+'</button>';
-  }).join('')+'</div>';
-}
-function toggleFmFrom(key,n){
-  ensureFm(); var fr=state.lineup.fm[key].from, i=fr.indexOf(n);
-  if(i===-1) fr.push(n); else fr.splice(i,1);
-  fr.sort(); save(); renderLineup();
+    return '<button type="button" class="lc'+n+' lcbtn lcauto'+(fr.indexOf(n)!==-1?' active':'')+'" tabindex="-1">'+n+'</button>';
+  }).join('')+'<span style="opacity:0.7;">(automatisch)</span></div>';
 }
 // Beschriftung der Formations-Knöpfe im Spiel
 function updateFmButtons(){['PP','U1','U2'].forEach(function(k){var b=document.getElementById('fm-btn-'+k); if(b) b.textContent=fmName(k);});}
