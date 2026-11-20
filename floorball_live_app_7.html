@@ -520,6 +520,7 @@
     <div id="alt-body"></div>
     <div class="row" style="margin-top:12px;">
       <button type="button" class="primary" onclick="altSave()" style="flex:1;">Speichern</button>
+      <button type="button" onclick="altClearAll()" style="flex:1;">Alles leeren</button>
       <button type="button" onclick="altCancel()" style="flex:1;">Abbrechen</button>
     </div>
   </div>
@@ -555,11 +556,12 @@ function ensureFm(){
     // "Danach": 1./2./3. Reihe oder Alternative Aufstellung
     if(k!=='ALT' && ['L1','L2','L3','ALT'].indexOf(state.lineup.fm[k].next)===-1) state.lineup.fm[k].next='L1';
   });
-  // Jede Special Line hat ihre eigene Alternative Aufstellung (fm[k].alt). Ältere Stände hatten eine gemeinsame (fm.ALT.s): einmal in alle drei kopieren.
+  // Jede Special Line hat ihre eigene Alternative Aufstellung (fm[k].alt), die neu auszufüllen ist.
+  // Ältere Stände hatten eine gemeinsame (fm.ALT.s): sie wird nicht übernommen, jede Special Line beginnt leer.
   var mig=false;
   ['PP','U1','U2'].forEach(function(k){
     var c=state.lineup.fm[k];
-    if(!c.alt||typeof c.alt!=='object'){c.alt=JSON.parse(JSON.stringify(state.lineup.fm.ALT.s||{})); mig=true;}
+    if(!c.alt||typeof c.alt!=='object'){c.alt={}; mig=true;}
   });
   if(mig) state.lineup.fm.ALT.s={};
 }
@@ -1113,6 +1115,7 @@ function renderAltModal(){
 function altSlot(i){altSel=i; renderAltModal();}
 function altSet(pid){ensureFm(); state.lineup.fm.ALT.s[altSel]=pid; altSel=null; renderAltModal();}
 function altClear(){ensureFm(); delete state.lineup.fm.ALT.s[altSel]; altSel=null; renderAltModal();}
+function altClearAll(){ensureFm(); state.lineup.fm.ALT.s={}; altSel=null; renderAltModal();}
 function altSave(){
   ensureFm(); if(altKey&&state.lineup.fm[altKey]) state.lineup.fm[altKey].alt=JSON.parse(JSON.stringify(state.lineup.fm.ALT.s));
   state.lineup.fm.ALT.s={};
