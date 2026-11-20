@@ -181,6 +181,11 @@
   .btn-fm-pp{background:#f2b84b !important; border-color:#f2b84b !important; color:#241a05 !important;}
   .btn-fm-uz{background:#7b61d9 !important; border-color:#7b61d9 !important; color:#ffffff !important;}
   .clickable{cursor:pointer;}
+  /* Reihenfarben (Reihe I bis III), auch in Special Lines, Auswahllisten und Bank */
+  .lc1{--lc:#8fc3f5;} .lc2{--lc:#9fe0a8;} .lc3{--lc:#f5c27a;}
+  .lcc{background:var(--lc) !important; border-color:var(--lc) !important; color:#14181b !important;}
+  body.lc-rand .lcc{background:#fff !important; border:4px solid var(--lc) !important;}
+  .lcb{font-style:normal; font-size:10px; font-weight:800; margin-left:5px; padding:0 4px; border-radius:4px; background:rgba(0,0,0,0.18); color:#14181b; vertical-align:middle;}
   .pool{background:rgba(0,0,0,0.22); border-radius:10px; padding:8px 10px; margin-top:10px;}
   .pool-title{font-size:12px; color:#fff; opacity:0.85;}
   .pool .pick-chip{background:#fff; color:#14181b; border-color:#fff; font-weight:600;}
@@ -417,6 +422,13 @@
         <button type="button" class="toggle-btn" onclick="toggleSection('sec-lineup')">Wechsel ▾</button></h2>
       <div class="sec-body">
         <p class="muted" style="margin:0 0 4px;">Namen einer Reihe antippen: alle möglichen Spieler erscheinen darunter (antippen = auf freien Platz). Position antippen: Auswahlliste für diesen Platz.</p>
+        <div class="row" style="margin:0 0 8px; align-items:center;">
+          <span class="muted" style="flex:0 0 auto;">Reihenfarbe:</span>
+          <div class="seg" id="lc-seg" style="flex:1;">
+            <button type="button" data-m="flaeche" onclick="setLcMode('flaeche')">Fläche</button>
+            <button type="button" data-m="rand" onclick="setLcMode('rand')">Dicker Rand</button>
+          </div>
+        </div>
         <div id="lineup"></div>
         <div class="slot-panel" id="slot-panel"></div>
       </div>
@@ -1029,6 +1041,24 @@ function toggleFmFrom(key,n){
 // Beschriftung der Formations-Knöpfe im Spiel
 function updateFmButtons(){['PP','U1','U2'].forEach(function(k){var b=document.getElementById('fm-btn-'+k); if(b) b.textContent=fmName(k);});}
 function nextLabel(val){return {L1:'1. Reihe',L2:'2. Reihe',L3:'3. Reihe',ALT:'Alternative Aufstellung',PP:'Überzahl',U1:'Unterzahl 1',U2:'Unterzahl 2'}[val]||'';}
+// Reihenfarbe: in welcher der Reihen I-III steht der Spieler (sonst keine Farbe)
+function lineIdxOf(pid){
+  if(pid==null||!state.lineup||!state.lineup.lines) return -1;
+  for(var i=0;i<3;i++){var L=state.lineup.lines[i]; if(!L) continue; for(var k in L){if(L[k]===pid) return i;}}
+  return -1;
+}
+function lcCls(pid){var i=lineIdxOf(pid); return i<0?'':' lcc lc'+(i+1);}
+function lcBadge(pid){var i=lineIdxOf(pid); return i<0?'':'<i class="lcb">'+['I','II','III'][i]+'</i>';}
+var lcMode=(function(){try{return localStorage.getItem('fl_lc_mode')==='rand'?'rand':'flaeche';}catch(e){return 'flaeche';}})();
+function setLcMode(m){
+  lcMode=m==='rand'?'rand':'flaeche';
+  try{localStorage.setItem('fl_lc_mode',lcMode);}catch(e){}
+  applyLcMode();
+}
+function applyLcMode(){
+  document.body.classList.toggle('lc-rand',lcMode==='rand');
+  document.querySelectorAll('#lc-seg button').forEach(function(b){b.classList.toggle('active',b.dataset.m===lcMode);});
+}
 function fmFieldHtml(key,modal,altMode){
   ensureFm();
   var f=FM[key], pos=FM_POS[f.kind];
@@ -1037,7 +1067,7 @@ function fmFieldHtml(key,modal,altMode){
       var pid=state.lineup.fm[key].s[i], p=pid!=null?playerById(pid):null;
       var sel=altMode?(altSel===i):(!modal&&selectedSlot&&selectedSlot.line===key&&String(selectedSlot.pos)===String(i));
       var click=modal?'':(altMode?' onclick="altSlot('+i+')"':' onclick="slotClick(\''+key+'\','+i+')"');
-      return '<div class="slot'+(p?' filled':'')+(sel?' selected':'')+'" data-slot="'+key+':'+i+'"'+click+'><span class="pos">'+esc(f.names[i]||i)+'</span><span class="who">'+(p?esc((p.nr?p.nr+' ':'')+shownName(p)):'+')+'</span></div>';
+      return '<div class="slot'+(p?' filled':'')+(sel?' selected':'')+(p?lcCls(pid):'')+'" data-slot="'+key+':'+i+'"'+click+'><span class="pos">'+esc(f.names[i]||i)+'</span><span class="who">'+(p?esc((p.nr?p.nr+' ':'')+shownName(p))+lcBadge(pid):'+')+'</span></div>';
     };
     return '<div class="line-card" style="margin-top:6px;"><div class="slot-grid-off">'+cell(1)+cell(2)+cell(3)+'</div><div class="slot-grid-def">'+cell(4)+cell(5)+'</div></div>';
   }
@@ -1046,8 +1076,8 @@ function fmFieldHtml(key,modal,altMode){
     var pid=state.lineup.fm[key].s[i], p=pid!=null?playerById(pid):null;
     var sel=altMode?(altSel===i):(!modal&&selectedSlot&&selectedSlot.line===key&&String(selectedSlot.pos)===String(i));
     var click=modal?'':(altMode?' onclick="altSlot('+i+')"':' onclick="slotClick(\''+key+'\','+i+')"');
-    html+='<div class="fm-slot'+(p?' filled':'')+(sel?' selected':'')+'" style="left:'+pos[i][0]+'%; top:'+pos[i][1]+'%;'+(f.kind==='uz'?' width:24%;':(f.kind==='line'?' width:27%;':''))+'" data-slot="'+key+':'+i+'"'+click+'>'+
-      '<span class="fm-num">'+esc(f.names[i]||i)+'</span><span>'+(p?esc((p.nr?p.nr+' ':'')+shownName(p)):'+')+'</span></div>';
+    html+='<div class="fm-slot'+(p?' filled':'')+(sel?' selected':'')+(p?lcCls(pid):'')+'" style="left:'+pos[i][0]+'%; top:'+pos[i][1]+'%;'+(f.kind==='uz'?' width:24%;':(f.kind==='line'?' width:27%;':''))+'" data-slot="'+key+':'+i+'"'+click+'>'+
+      '<span class="fm-num">'+esc(f.names[i]||i)+'</span><span>'+(p?esc((p.nr?p.nr+' ':'')+shownName(p))+lcBadge(pid):'+')+'</span></div>';
   }
   return html+'</div>';
 }
@@ -1077,7 +1107,7 @@ function renderAltModal(){
       avail=avail.filter(function(p){return inSpecial.indexOf(p.id)===-1;});
     }
     body+='<p class="muted" style="margin:8px 0 4px;">'+esc(FM.ALT.names[altSel])+': Spieler wählen'+(inSpecial.length?' (ohne die Spieler der '+esc(fmName(altKey))+')':'')+'</p><div class="chip-grid">'+
-      (avail.length?avail.map(function(p){return '<span class="pick-chip" onclick="altSet('+p.id+')">'+esc(playerLabel(p))+'</span>';}).join(' '):'<span class="muted">Keine weiteren anwesenden Feldspieler.</span>')+'</div>'+
+      (avail.length?avail.map(function(p){return '<span class="pick-chip'+lcCls(p.id)+'" onclick="altSet('+p.id+')">'+esc(playerLabel(p))+lcBadge(p.id)+'</span>';}).join(' '):'<span class="muted">Keine weiteren anwesenden Feldspieler.</span>')+'</div>'+
       '<div class="row" style="margin-top:8px;"><button type="button" onclick="altClear()" style="flex:1;">Platz leeren</button></div>';
   } else body+='<p class="muted" style="margin:8px 0 0;">Platz antippen, dann den Spieler wählen.</p>';
   document.getElementById('alt-body').innerHTML=body;
@@ -1135,7 +1165,7 @@ function poolHtml(key){
   var avail=availableForSlot(poolSlotFor(key)), what=key==='G'?'Torhüter':'Feldspieler';
   return '<div class="pool"><div class="pool-title">'+what+' nach Trikotnummer – antippen setzt auf einen freien Platz</div><div class="chip-grid" style="margin-top:4px;">'+
     (avail.length?avail.map(function(p){
-      return '<span class="pick-chip" draggable="true" ondragstart="chipDragStart(event,'+p.id+')" onclick="poolPick(\''+key+'\','+p.id+')">'+esc((p.nr?p.nr+' ':'')+shownName(p)+(p.isCaptain?' (K)':''))+'</span>';
+      return '<span class="pick-chip'+lcCls(p.id)+'" draggable="true" ondragstart="chipDragStart(event,'+p.id+')" onclick="poolPick(\''+key+'\','+p.id+')">'+esc((p.nr?p.nr+' ':'')+shownName(p)+(p.isCaptain?' (K)':''))+lcBadge(p.id)+'</span>';
     }).join(' '):'<span style="color:#fff; opacity:0.85; font-size:13px;">Keine weiteren anwesenden '+what+' verfügbar.</span>')+'</div></div>';
 }
 function poolPick(key,pid){
@@ -1160,7 +1190,7 @@ function openSlotMenu(el,slot){
   var h='<div class="sm-title">'+esc(slotLabel(slot))+(isLive()&&!isFm(slot.line)?' · Wechsel bei Min '+curMinute():'')+'</div>';
   if(pc) h+='<div class="sm-cur">Aktuell: <b>'+esc(playerLabel(pc))+'</b></div><button type="button" class="sm-item sm-clear" onclick="menuClear()">Platz leeren</button>';
   h+=avail.length?avail.map(function(p){
-    return '<button type="button" class="sm-item" onclick="menuPick('+p.id+')">'+esc((p.nr?p.nr+' ':'')+shownName(p)+(p.isCaptain?' (K)':''))+'</button>';
+    return '<button type="button" class="sm-item'+lcCls(p.id)+'" onclick="menuPick('+p.id+')">'+esc((p.nr?p.nr+' ':'')+shownName(p)+(p.isCaptain?' (K)':''))+lcBadge(p.id)+'</button>';
   }).join(''):'<div class="sm-empty">'+(slot.line==='G'?'Kein weiterer anwesender Torwart verfügbar.':'Keine weiteren anwesenden Feldspieler verfügbar.')+'</div>';
   var m=document.getElementById('slot-menu'), bd=document.getElementById('slot-menu-bd');
   menuSlot=slot; m.innerHTML=h; bd.style.display='block'; m.style.display='block';
@@ -2245,7 +2275,7 @@ function slotHtml(lineIdx,pos){
   var val=lineIdx==='G'?state.lineup.goalie:(lineIdx==='X'?state.lineup.extra:state.lineup.lines[lineIdx][pos]);
   var p=playerById(val);
   var isSel=selectedSlot&&selectedSlot.line===lineIdx&&selectedSlot.pos===pos;
-  var cls='slot'+(p?' filled':'')+(isSel?' selected':'');
+  var cls='slot'+(p?' filled':'')+(isSel?' selected':'')+(p&&typeof lineIdx==='number'?' lcc lc'+(lineIdx+1):'');
   var posLabel=lineIdx==='G'?'Goalie':(lineIdx==='X'?'6. Feldspieler':POS_LABELS[pos]);
   var who=p?playerLabel(p):'+';
   var lineArg=(lineIdx==='G'||lineIdx==='X')?"'"+lineIdx+"'":lineIdx;
@@ -2254,6 +2284,7 @@ function slotHtml(lineIdx,pos){
     '<span class="pos">'+posLabel+'</span><span class="who">'+who+'</span></div>';
 }
 function renderLineup(){
+  applyLcMode();
   var el=document.getElementById('lineup');
   var html='<div class="line-card"><p class="line-title clickable" onclick="togglePool(\'G\')">Tor '+poolMark('G')+'</p><div class="goalie-wrap">'+slotHtml('G','G')+'</div>'+poolHtml('G')+'</div>';
   if(state.emptyNet) html+='<div class="line-card"><p class="line-title clickable" onclick="togglePool(\'X\')">Empty Net – 6. Feldspieler '+poolMark('X')+'</p><div class="goalie-wrap">'+slotHtml('X','X')+'</div>'+poolHtml('X')+'</div>';
@@ -2276,7 +2307,7 @@ function renderLineup(){
   bi.setAttribute('ondragleave','dragLeaveHandler(event)');
   bi.setAttribute('ondrop','benchDrop(event)');
   bi.innerHTML='<h3>Auswechselbank (anwesend, nicht aufgestellt)</h3>'+
-    (bench.length ? '<div class="chip-grid">'+bench.map(function(p){return '<div class="chip" draggable="true" ondragstart="chipDragStart(event,'+p.id+')">'+playerLabel(p)+'</div>';}).join('')+'</div>'
+    (bench.length ? '<div class="chip-grid">'+bench.map(function(p){return '<div class="chip'+lcCls(p.id)+'" draggable="true" ondragstart="chipDragStart(event,'+p.id+')">'+playerLabel(p)+lcBadge(p.id)+'</div>';}).join('')+'</div>'
                   : '<p class="muted">Keine – alle Anwesenden sind aufgestellt. Spieler hierher ziehen, um sie aus der Aufstellung zu nehmen.</p>');
 }
 

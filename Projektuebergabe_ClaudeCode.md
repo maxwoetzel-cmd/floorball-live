@@ -59,6 +59,9 @@ Verantwortlich: Max Woetzel (Head-Coach Herren).
   Beim Eingeben der Alternativen Aufstellung (`renderAltModal`) werden die Spieler der Special Line, von der aus sie geöffnet wurde (`altKey`), nicht zur Auswahl angeboten. Da es nur **eine** Alternative gibt, gilt der Ausschluss je nach Aufruf für Überzahl oder Unterzahl 1/2; bereits eingetragene Spieler bleiben.
 - **Aufstellung bedienen:** Reihenname antippen → mögliche Spieler direkt darunter (antippen = freier Platz). Position antippen →
   Auswahlliste am Platz. Tor-Platz nur Torhüter, alle anderen Plätze nur Feldspieler, jeweils nach Trikotnummer sortiert.
+- **Reihenfarben** (20.11.2026): Reihe I blau, II grün, III orange (`.lc1`–`.lc3`, `--lc`). Ein Spieler trägt die Farbe der Reihe I–III, in der er steht, auch in Special Lines,
+  Alternativer Aufstellung, Auswahllisten, Slot-Menü und Bank (`lineIdxOf`, `lcCls`, `lcBadge` mit Zusatz I/II/III). Ohne Reihe bleibt es neutral (Torwart, Bank-Spieler, Spieler nur in Special Line).
+  Umschalter „Fläche / Dicker Rand“ im Abschnitt Aufstellung (`setLcMode`, `localStorage` `fl_lc_mode`). Gilt im Spiel genauso (gleiche Renderfunktionen).
 - **Vornamen** werden überall angezeigt (bei gleichem Vornamen mit Initial des Nachnamens). **Kein Plus/Minus.**
 - **Zonen** heißen Kurzdistanz, Halbfeld (linke Tasche, zentrales Halbfeld, rechte Tasche) und Langdistanz. Daten bleiben als `tornah/zentral/fern`.
 
