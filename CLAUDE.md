@@ -16,6 +16,9 @@ Grund: Sie wird als lokale Datei direkt im Browser geöffnet (bzw. am Handy zum
 Startbildschirm hinzugefügt) und muss ohne Internet funktionieren.
 Also: keine externen Skripte/Stylesheets, keine npm-Pakete, keine CDN-Links,
 kein Framework. Neue Funktionen immer inline ergänzen.
+**Einzige Ausnahme (von Max am 20.11.2026 freigegeben, wie in der Floorball-Zentrale):** Für den PDF-Export werden
+`jsPDF 2.5.1` und `html2canvas 1.4.1` erst beim ersten Klick auf „Als PDF“ von `cdnjs.cloudflare.com` nachgeladen (`ladePdfLibs`).
+Ohne Internet oder bei Fehler öffnet sich der Druckdialog (`printHtml`), alles andere läuft ohne die Bibliotheken. Keine weiteren externen Quellen.
 
 ## Technik
 - Reines HTML/CSS/Vanilla-JavaScript, eine Datei.
