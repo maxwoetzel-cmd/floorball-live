@@ -138,7 +138,11 @@ Aufstellung eines kommenden Spiels aus dem Saisonmanager (Format als gleich wie 
 15. **Penalty-Shot (während des Spiels) umgesetzt (20.11.2026).** Knopf „Penalty-Shot erfassen“ im Abschnitt Schuss erfassen, Dialog `#pen-modal` (Team, Schütze optional nur für unser Team, Ergebnis Tor/Gehalten/Daneben).
     Gespeichert als Schuss in `state.shots` mit `pen:true`, `zone:'penalty'`, optional `shooterId`; Gegner-Penalty bekommt `goalieId` (`activeGoalieId`). Zählt bei Tore, Schüsse, aufs Tor, Torhüterquote, Spielstand;
     **nicht** in Schussbild, Zonenstatistik, Torquote je Zone und erwartete Tore (Filter `!x.pen`). Taucht auf in Ereignisliste, Torfolge, Auswertung (Abschnitt „Penalty“ in `miniStatsHtml`), Spielbericht, CSV (Spalten Penalty, Schütze),
-    YouTube-Zeitmarken („(Penalty, Schütze)“) und Saisonauswertung (zwei Kennzahlen). **Offen: Penalty-Schießen nach Verlängerung** (Format noch zu klären, eigene Serie, nicht in Tore/Quote).
+    YouTube-Zeitmarken („(Penalty, Schütze)“) und Saisonauswertung (zwei Kennzahlen). 
+16. **Penalty-Schießen nach der Verlängerung (20.11.2026):** Abschnitt `#sec-shootout` in Pause und Spielende, sichtbar sobald das Drittel „Verlängerung“ ist oder Schüsse da sind. Je Team 5 Schützen im Wechsel, vorzeitige Entscheidung, danach Sudden Death (`soStatusOf`). Wer beginnt, wählt man vor dem ersten Schuss (`state.soFirst`).
+    Erfasst wird je Schuss Team, optional Schütze (unser Team) und Tor/Gehalten/Daneben in `state.shootout` (Einträge mit `id`, in `SYNC_ITEM_KEYS`, `resetGameData` leert es). Es zählt **nicht** in Tore, Schüsse und Quote. Der Gegner-Schuss bekommt `goalieId` aus `state.lineup.goalie`; die Torwartquote im Schießen wird getrennt gezeigt.
+    Anzeige: Auswertung (Abschnitt „Penalty-Schießen“), Spielbericht („(n. P. 3:0)“), Saisonauswertung (Sieger im Schießen zählt als Sieg bzw. Niederlage, Ergebnis mit „n. P.“), Schuss-CSV (Drittel „Penalty-Schießen“).
+17. **Aufstellung teilen (20.11.2026):** Knöpfe „Aufstellung teilen / speichern“ (Seite wie der Spielbericht über `shareHtml`, mit Reihenfarben) und „Als Text kopieren“ (für WhatsApp) im Abschnitt Aufstellung. Inhalt: Tor, Reihen I–III, Auswechselbank, Special Lines mit Besetzung (Ziffer der Herkunftsreihe) und „Danach“ (Reihe oder Alternative mit Namen). Funktionen `lineupExportHtml`, `lineupExportText`, `shareLineup`, `copyLineupText`.
 
 ---
 
