@@ -419,7 +419,6 @@
         <p class="muted" style="margin:0 0 4px;">Namen einer Reihe antippen: alle möglichen Spieler erscheinen darunter (antippen = auf freien Platz). Position antippen: Auswahlliste für diesen Platz.</p>
         <div id="lineup"></div>
         <div class="slot-panel" id="slot-panel"></div>
-        <div id="bench-info" style="margin-top:10px;"></div>
       </div>
     </section>
 
@@ -1072,8 +1071,12 @@ function renderAltModal(){
   ensureFm();
   var body=fmFieldHtml('ALT',false,true);
   if(altSel){
-    var avail=availableForSlot({line:'ALT',pos:altSel});
-    body+='<p class="muted" style="margin:8px 0 4px;">'+esc(FM.ALT.names[altSel])+': Spieler wählen</p><div class="chip-grid">'+
+    var avail=availableForSlot({line:'ALT',pos:altSel}), inSpecial=[];
+    if(altKey&&state.lineup.fm[altKey]){
+      var sp=state.lineup.fm[altKey].s; inSpecial=Object.keys(sp).map(function(k){return sp[k];});
+      avail=avail.filter(function(p){return inSpecial.indexOf(p.id)===-1;});
+    }
+    body+='<p class="muted" style="margin:8px 0 4px;">'+esc(FM.ALT.names[altSel])+': Spieler wählen'+(inSpecial.length?' (ohne die Spieler der '+esc(fmName(altKey))+')':'')+'</p><div class="chip-grid">'+
       (avail.length?avail.map(function(p){return '<span class="pick-chip" onclick="altSet('+p.id+')">'+esc(playerLabel(p))+'</span>';}).join(' '):'<span class="muted">Keine weiteren anwesenden Feldspieler.</span>')+'</div>'+
       '<div class="row" style="margin-top:8px;"><button type="button" onclick="altClear()" style="flex:1;">Platz leeren</button></div>';
   } else body+='<p class="muted" style="margin:8px 0 0;">Platz antippen, dann den Spieler wählen.</p>';
@@ -2259,6 +2262,7 @@ function renderLineup(){
       '<div class="slot-grid-off">'+slotHtml(i,'OL')+slotHtml(i,'C')+slotHtml(i,'OR')+'</div>'+
       '<div class="slot-grid-def">'+slotHtml(i,'DL')+slotHtml(i,'DR')+'</div>'+poolHtml('L'+i)+'</div>';
   }
+  html+='<div id="bench-info" style="margin:10px 0;"></div>'; // Auswechselbank direkt unter der 3. Reihe, danach die Special Lines
   ensureFm();
   Object.keys(FM).forEach(function(k){
     if(k==='ALT') return; // Alternative Aufstellung wird über den Knopf bei "Danach" eingegeben
