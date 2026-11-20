@@ -254,8 +254,7 @@
   <h2 id="summary-title">Auswertung</h2>
   <div id="summary-body"></div>
   <div class="row" id="report-actions" style="display:none; margin-top:12px;">
-    <button type="button" class="primary" onclick="shareGameReport()" style="flex:1;">Spielbericht teilen / speichern</button>
-    <button type="button" onclick="shareGameReport(true)" style="flex:1;">Als PDF</button>
+    <button type="button" class="primary" onclick="shareGameReport()" style="flex:1;">Spielbericht teilen / Download</button>
   </div>
 </section>
 
@@ -434,8 +433,7 @@
         <div id="lineup"></div>
         <div class="slot-panel" id="slot-panel"></div>
         <div class="row" style="margin-top:12px;">
-          <button type="button" class="primary" onclick="shareLineup()" style="flex:1;">Aufstellung teilen / speichern</button>
-          <button type="button" onclick="shareLineup(true)" style="flex:1;">Als PDF</button>
+          <button type="button" class="primary" onclick="shareLineup()" style="flex:1;">Aufstellung teilen / Download</button>
           <button type="button" onclick="copyLineupText()" style="flex:1;">Als Text kopieren</button>
         </div>
       </div>
@@ -511,8 +509,7 @@
   <div id="season-games" style="margin-top:8px;"></div>
   <div id="season-body"></div>
   <div class="row" id="season-actions" style="display:none; margin-top:12px;">
-    <button type="button" class="primary" onclick="shareSeasonReport()" style="flex:1;">Saisonauswertung teilen / speichern</button>
-    <button type="button" onclick="shareSeasonReport(true)" style="flex:1;">Als PDF</button>
+    <button type="button" class="primary" onclick="shareSeasonReport()" style="flex:1;">Saisonauswertung teilen / Download</button>
   </div>
 </section>
 
@@ -523,6 +520,23 @@
       <button type="button" onclick="hideFormation()">Schließen ✕</button>
     </div>
     <div id="fm-body"></div>
+  </div>
+</div>
+
+<div id="exp-modal" style="display:none; position:fixed; inset:0; z-index:24; background:rgba(10,12,14,0.99); overflow:auto; padding:12px;">
+  <div style="max-width:760px; margin:0 auto;">
+    <h2 id="exp-title" style="margin:0 0 8px; font-size:20px; color:var(--text); text-transform:none; letter-spacing:0;"></h2>
+    <div class="row" style="position:sticky; top:0; z-index:2; background:rgba(10,12,14,0.99); padding:6px 0;">
+      <button type="button" onclick="expClose()" style="flex:1;">Schließen</button>
+      <button type="button" onclick="expDownload()" style="flex:1;">Download</button>
+      <button type="button" class="primary" onclick="expShare()" style="flex:1;">Teilen</button>
+    </div>
+    <div class="seg" id="exp-seg" style="margin:8px 0;">
+      <button type="button" data-f="pdf" onclick="setExpFmt('pdf')">PDF</button>
+      <button type="button" data-f="text" onclick="setExpFmt('text')">Text</button>
+      <button type="button" data-f="html" onclick="setExpFmt('html')">Seite</button>
+    </div>
+    <div id="exp-prev"></div>
   </div>
 </div>
 
@@ -1442,9 +1456,7 @@ function lineupExportHtml(){
   });
   return h+'</section></div>';
 }
-function shareLineup(pdf){
-  outHtml(reportPage('Aufstellung '+usName()+' – '+oppName(), lineupExportHtml()), 'aufstellung_'+(gameDateOf(state)||'spiel')+'_'+fileSafe(oppName())+'.html', pdf);
-}
+function shareLineup(){openExport('lineup');}
 function copyLineupText(){
   var txt=lineupExportText();
   function fallback(){
@@ -2016,26 +2028,30 @@ function svgsToPng(doc){
 }
 // Berichtsseite in A4-PDF setzen: Abschnitte als Bild; ein Abschnitt, der nicht auf eine Seite passt, wird in seine Bausteine
 // (Überschriften, Tabellen, Schussbilder) zerlegt, die nie mitten durchgeschnitten werden. Nur ein einzelner Baustein über Seitenhöhe wird geteilt.
+// Liefert {blob, pages}: das PDF und je Seite ein Vorschaubild.
 function pdfRender(frame){
   var doc=frame.contentDocument;
   var pdf=new window.jspdf.jsPDF({unit:'mm',format:'a4',orientation:'portrait'});
-  var M=10, CW=190, PH=297-2*M, y=M;
+  var M=10, CW=190, PH=297-2*M, y=M, K=794/210, pcs=[], px=null;
+  function pageCv(){var c=document.createElement('canvas'); c.width=794; c.height=1123; var x=c.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,794,1123); pcs.push(c); return x;}
+  px=pageCv();
+  function newPage(){pdf.addPage(); y=M; px=pageCv();}
   function mmH(el){return el.offsetWidth?el.offsetHeight*CW/el.offsetWidth:el.offsetHeight*0.26;}
   function place(u){
     if(!u.el.offsetHeight) return Promise.resolve();
     return window.html2canvas(u.el,{scale:2,backgroundColor:'#ffffff',useCORS:true,logging:false,windowWidth:794}).then(function(cv){
       var h=cv.height*CW/cv.width;
       if(h<=PH){
-        if(y>M&&y+h>M+PH){pdf.addPage(); y=M;}
-        pdf.addImage(cv.toDataURL('image/jpeg',0.92),'JPEG',M,y,CW,h); y+=h+u.gap;
+        if(y>M&&y+h>M+PH) newPage();
+        pdf.addImage(cv.toDataURL('image/jpeg',0.92),'JPEG',M,y,CW,h); px.drawImage(cv,M*K,y*K,CW*K,h*K); y+=h+u.gap;
       } else {
-        if(y>M){pdf.addPage(); y=M;}
+        if(y>M) newPage();
         var pxPer=cv.width/CW, slicePx=Math.floor(PH*pxPer), off=0;
         while(off<cv.height){
           var sh=Math.min(slicePx,cv.height-off), c2=document.createElement('canvas'); c2.width=cv.width; c2.height=sh;
           c2.getContext('2d').drawImage(cv,0,off,cv.width,sh,0,0,cv.width,sh);
-          var hh=sh/pxPer; pdf.addImage(c2.toDataURL('image/jpeg',0.92),'JPEG',M,y,CW,hh); off+=sh;
-          if(off<cv.height){pdf.addPage(); y=M;} else y+=hh+u.gap;
+          var hh=sh/pxPer; pdf.addImage(c2.toDataURL('image/jpeg',0.92),'JPEG',M,y,CW,hh); px.drawImage(c2,M*K,y*K,CW*K,hh*K); off+=sh;
+          if(off<cv.height) newPage(); else y+=hh+u.gap;
         }
       }
     });
@@ -2054,7 +2070,7 @@ function pdfRender(frame){
   }).then(function(){
     var n=pdf.getNumberOfPages();
     for(var i=1;i<=n;i++){pdf.setPage(i); pdf.setFontSize(8); pdf.setTextColor(120); pdf.text('Floorball Live · Seite '+i+' von '+n,105,293,{align:'center'});}
-    return pdf.output('blob');
+    return {blob:pdf.output('blob'), pages:pcs.map(function(c){return c.toDataURL('image/jpeg',0.6);})};
   });
 }
 // PDF teilen (Teilen-Menü) oder herunterladen. Kein Drive-Speichern: das Backend nimmt nur Text an.
@@ -2069,28 +2085,110 @@ function sharePdfBlob(blob,name){
   }catch(e){shared=false;}
   if(!shared){triggerDownload(blob,name); showToast('PDF heruntergeladen: '+name);}
 }
-function makePdf(html,name){
-  var pdfName=String(name).replace(/\.html$/i,'')+'.pdf';
-  showToast('PDF wird erstellt …');
-  function fallback(why){showToast(why+' – Druckdialog'); printHtml(html,name);}
-  ladePdfLibs(function(ok){
-    if(!ok){fallback('PDF-Bibliothek nicht ladbar'); return;}
-    var light='<style>:root{--bg:#fff; --panel:#fff; --panel-alt:#eef1f3; --border:#c9d1d6; --text:#111; --text-secondary:#333; --text-muted:#555;} html,body{background:#fff !important; color:#111 !important;}</style>';
-    var f=document.createElement('iframe'); f.style.cssText='position:fixed; left:-10000px; top:0; width:794px; height:1123px; border:0;';
-    document.body.appendChild(f);
-    function cleanup(){if(f.parentNode) f.parentNode.removeChild(f);}
-    var done=false;
-    f.onload=function(){
-      if(done) return; done=true;
-      setTimeout(function(){
-        pdfRender(f).then(function(blob){cleanup(); sharePdfBlob(blob,pdfName);})
-          .catch(function(e){cleanup(); fallback('PDF nicht möglich');});
-      },300);
-    };
-    f.srcdoc=html.replace('</head>',light+'</head>');
+// Berichtsseite → PDF (Promise mit {blob,pages}); lädt bei Bedarf die Bibliotheken nach
+function pdfBuild(html){
+  return new Promise(function(resolve,reject){
+    ladePdfLibs(function(ok){
+      if(!ok){reject(new Error('lib')); return;}
+      var light='<style>:root{--bg:#fff; --panel:#fff; --panel-alt:#eef1f3; --border:#c9d1d6; --text:#111; --text-secondary:#333; --text-muted:#555;} html,body{background:#fff !important; color:#111 !important;}</style>';
+      var f=document.createElement('iframe'); f.style.cssText='position:fixed; left:-10000px; top:0; width:794px; height:1123px; border:0;';
+      document.body.appendChild(f);
+      function cleanup(){if(f.parentNode) f.parentNode.removeChild(f);}
+      var done=false;
+      f.onload=function(){
+        if(done) return; done=true;
+        setTimeout(function(){pdfRender(f).then(function(r){cleanup(); resolve(r);}).catch(function(e){cleanup(); reject(e);});},300);
+      };
+      f.srcdoc=html.replace('</head>',light+'</head>');
+    });
   });
 }
-function outHtml(html,name,pdf){if(pdf) makePdf(html,name); else shareHtml(html,name);}
+/* ---------- Export-Dialog (wie in der Floorball-Zentrale): Vorschau als PDF / Text / Seite, dann Download oder Teilen ---------- */
+var EXP=null;
+function htmlToText(html){
+  var d=new DOMParser().parseFromString(html,'text/html');
+  var BLOCK={H1:1,H2:1,H3:1,P:1,DIV:1,SECTION:1,TABLE:1,UL:1,LI:1,DETAILS:1,SUMMARY:1};
+  function walk(n){
+    if(n.nodeType===3) return n.nodeValue.replace(/\s+/g,' ');
+    if(n.nodeType!==1) return '';
+    var t=n.tagName.toUpperCase();
+    if(t==='STYLE'||t==='SCRIPT'||t==='SVG') return '';
+    if(t==='BR') return '\n';
+    if(t==='TR') return [].slice.call(n.children).map(function(c){return walk(c).trim();}).join(' | ')+'\n';
+    var r=[].slice.call(n.childNodes).map(walk).join('');
+    if(t==='SPAN') return ' '+r+' ';
+    return BLOCK[t]?'\n'+r+'\n':r;
+  }
+  return walk(d.body).replace(/[ \t]{2,}/g,' ').replace(/[ \t]+\n/g,'\n').replace(/\n[ \t]+/g,'\n').replace(/\n{3,}/g,'\n\n').trim();
+}
+function expBuild(kind){
+  if(kind==='lineup'){
+    var tl='Aufstellung '+usName()+' – '+oppName();
+    return {title:tl, base:'aufstellung_'+(gameDateOf(state)||'spiel')+'_'+fileSafe(oppName()), html:reportPage(tl,lineupExportHtml()), text:lineupExportText()};
+  }
+  if(kind==='game'){
+    if(!hasGameData()){showToast('Noch keine Spieldaten'); return null;}
+    var tg='Spielbericht '+usName()+' – '+oppName(), hg=reportPage(tg,gameReportHtml());
+    return {title:tg, base:'spielbericht_'+(gameDateOf(state)||'spiel')+'_'+fileSafe(oppName()), html:hg, text:htmlToText(hg)};
+  }
+  var games=seasonGames(), ex=seasonExcl(), inc=games.filter(function(g){return ex.indexOf(g.key)===-1;});
+  if(!inc.length){showToast('Kein Spiel ausgewählt'); return null;}
+  var y=seasonStartIso().slice(0,4), ts='Saisonauswertung '+y+'/'+String(+y+1).slice(-2);
+  var hs=reportPage(ts,'<section><h1 style="margin:0;">'+esc(ts)+'</h1><p class="muted" style="margin:4px 0 0;">'+esc((inc[0].state.teamUs||usName())+' · '+inc.length+' Spiele bis '+fmtDate(inc[inc.length-1].date))+'</p></section><section>'+seasonReportHtml(inc)+'</section>');
+  return {title:ts, base:'saisonauswertung_'+y+'_stand_'+isoDate(Date.now()), html:hs, text:htmlToText(hs)};
+}
+function openExport(kind){
+  var b=expBuild(kind); if(!b) return;
+  var mine=EXP={title:b.title, base:b.base, html:b.html, text:b.text, fmt:'pdf', pdf:null, pages:[], st:'loading'};
+  document.getElementById('exp-title').textContent=b.title;
+  document.getElementById('exp-modal').style.display='block';
+  renderExp();
+  pdfBuild(b.html).then(function(r){if(EXP!==mine) return; mine.pdf=r.blob; mine.pages=r.pages; mine.st='ok'; renderExp();})
+    .catch(function(){if(EXP!==mine) return; mine.st='fail'; if(mine.fmt==='pdf') mine.fmt='text'; renderExp();});
+}
+function setExpFmt(f){if(!EXP) return; if(f==='pdf'&&EXP.st!=='ok') return; EXP.fmt=f; renderExp();}
+function renderExp(){
+  if(!EXP) return;
+  document.querySelectorAll('#exp-seg button').forEach(function(b){
+    var f=b.dataset.f; b.classList.toggle('active',f===EXP.fmt); if(f==='pdf') b.disabled=(EXP.st!=='ok');
+  });
+  var el=document.getElementById('exp-prev'), note='';
+  if(EXP.st==='fail') note='<p class="muted" style="margin:0 0 8px;">Das PDF konnte nicht erstellt werden (Internet nötig). Text und Seite gehen weiter. <button type="button" onclick="printHtml(EXP.html,EXP.base)">Druckdialog öffnen</button></p>';
+  if(EXP.fmt==='pdf'){
+    if(EXP.st==='loading'){el.innerHTML='<p class="muted">PDF wird erstellt …</p>'; return;}
+    el.innerHTML=EXP.pages.map(function(u,i){return '<img src="'+u+'" alt="Seite '+(i+1)+'" style="width:100%; display:block; margin:0 0 10px; border:1px solid var(--border); background:#fff;">';}).join('');
+  } else if(EXP.fmt==='text'){
+    el.innerHTML=note+(EXP.st==='loading'?'<p class="muted" style="margin:0 0 8px;">PDF wird noch erstellt …</p>':'')+'<textarea id="exp-text" readonly style="width:100%; min-height:60vh; font-family:monospace; font-size:13px;"></textarea>';
+    document.getElementById('exp-text').value=EXP.text;
+  } else {
+    el.innerHTML=note+(EXP.st==='loading'?'<p class="muted" style="margin:0 0 8px;">PDF wird noch erstellt …</p>':'')+'<iframe id="exp-frame" style="width:100%; height:65vh; border:1px solid var(--border); border-radius:8px; background:#fff;"></iframe>';
+    document.getElementById('exp-frame').srcdoc=EXP.html;
+  }
+}
+function expClose(){document.getElementById('exp-modal').style.display='none'; EXP=null;}
+function expCopyText(txt){
+  function fallback(){
+    var ta=document.createElement('textarea'); ta.value=txt; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select();
+    var ok=false; try{ok=document.execCommand('copy');}catch(e){} document.body.removeChild(ta);
+    showToast(ok?'Text kopiert':'Kopieren nicht möglich');
+  }
+  if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(function(){showToast('Text kopiert');},fallback);
+  else fallback();
+}
+function expDownload(){
+  if(!EXP) return;
+  if(EXP.fmt==='pdf'){ if(!EXP.pdf) return; triggerDownload(EXP.pdf,EXP.base+'.pdf'); showToast('Heruntergeladen: '+EXP.base+'.pdf'); }
+  else if(EXP.fmt==='text') saveFile(new Blob([EXP.text],{type:'text/plain;charset=utf-8'}),EXP.base+'.txt');
+  else saveFile(new Blob([EXP.html],{type:'text/html'}),EXP.base+'.html');
+}
+function expShare(){
+  if(!EXP) return;
+  if(EXP.fmt==='pdf'){ if(EXP.pdf) sharePdfBlob(EXP.pdf,EXP.base+'.pdf'); return; }
+  if(EXP.fmt==='html'){ shareHtml(EXP.html,EXP.base+'.html'); return; }
+  var txt=EXP.text, ttl=EXP.title;
+  if(navigator.share) navigator.share({title:ttl,text:txt}).catch(function(err){if(err&&err.name==='AbortError') return; expCopyText(txt);});
+  else expCopyText(txt);
+}
 function goalTimelineHtml(s){
   var sc={Wir:0,Gegner:0};
   var rows=s.shots.filter(function(x){return x.outcome==='Tor';}).slice().sort(function(a,b){
@@ -2108,10 +2206,7 @@ function gameReportHtml(){
     '<section><h2>Torfolge</h2>'+goalTimelineHtml(state)+'</section>'+
     '<section><h2>Gesamtauswertung</h2>'+summaryHtml(null).replace(/<details /g,'<details open ')+'</section>';
 }
-function shareGameReport(pdf){
-  if(!hasGameData()){showToast('Noch keine Spieldaten'); return;}
-  outHtml(reportPage('Spielbericht '+usName()+' – '+oppName(), gameReportHtml()), 'spielbericht_'+(gameDateOf(state)||'spiel')+'_'+fileSafe(oppName())+'.html', pdf);
-}
+function shareGameReport(){openExport('game');}
 
 /* Saisonauswertung: Spielstände aus Drive (listExports) oder ausgewählten Dateien */
 var seasonEntries=[];
@@ -2257,13 +2352,7 @@ function renderSeason(){
   body.innerHTML=inc.length?seasonReportHtml(inc):'<p class="muted">Kein Spiel ausgewählt.</p>';
   act.style.display=inc.length?'flex':'none';
 }
-function shareSeasonReport(pdf){
-  var games=seasonGames(), ex=seasonExcl(), inc=games.filter(function(g){return ex.indexOf(g.key)===-1;});
-  if(!inc.length){showToast('Kein Spiel ausgewählt'); return;}
-  var y=seasonStartIso().slice(0,4), title='Saisonauswertung '+y+'/'+String(+y+1).slice(-2);
-  outHtml(reportPage(title,'<section><h1 style="margin:0;">'+esc(title)+'</h1><p class="muted" style="margin:4px 0 0;">'+esc((inc[0].state.teamUs||usName())+' · '+inc.length+' Spiele bis '+fmtDate(inc[inc.length-1].date))+'</p></section><section>'+seasonReportHtml(inc)+'</section>'),
-    'saisonauswertung_'+y+'_stand_'+isoDate(Date.now())+'.html', pdf);
-}
+function shareSeasonReport(){openExport('season');}
 
 /* ---------- Gemeinsam erfassen (mehrere Geräte, nur Web-App) ----------
    Jedes Gerät hält drei Stände: den eigenen, den zuletzt mit dem Server abgeglichenen ("base") und den des Servers.
