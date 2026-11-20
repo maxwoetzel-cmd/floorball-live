@@ -255,6 +255,7 @@
   <div id="summary-body"></div>
   <div class="row" id="report-actions" style="display:none; margin-top:12px;">
     <button type="button" class="primary" onclick="shareGameReport()" style="flex:1;">Spielbericht teilen / speichern</button>
+    <button type="button" onclick="shareGameReport(true)" style="flex:1;">Als PDF</button>
   </div>
 </section>
 
@@ -434,6 +435,7 @@
         <div class="slot-panel" id="slot-panel"></div>
         <div class="row" style="margin-top:12px;">
           <button type="button" class="primary" onclick="shareLineup()" style="flex:1;">Aufstellung teilen / speichern</button>
+          <button type="button" onclick="shareLineup(true)" style="flex:1;">Als PDF</button>
           <button type="button" onclick="copyLineupText()" style="flex:1;">Als Text kopieren</button>
         </div>
       </div>
@@ -510,6 +512,7 @@
   <div id="season-body"></div>
   <div class="row" id="season-actions" style="display:none; margin-top:12px;">
     <button type="button" class="primary" onclick="shareSeasonReport()" style="flex:1;">Saisonauswertung teilen / speichern</button>
+    <button type="button" onclick="shareSeasonReport(true)" style="flex:1;">Als PDF</button>
   </div>
 </section>
 
@@ -1439,8 +1442,8 @@ function lineupExportHtml(){
   });
   return h+'</section></div>';
 }
-function shareLineup(){
-  shareHtml(reportPage('Aufstellung '+usName()+' – '+oppName(), lineupExportHtml()), 'aufstellung_'+(gameDateOf(state)||'spiel')+'_'+fileSafe(oppName())+'.html');
+function shareLineup(pdf){
+  outHtml(reportPage('Aufstellung '+usName()+' – '+oppName(), lineupExportHtml()), 'aufstellung_'+(gameDateOf(state)||'spiel')+'_'+fileSafe(oppName())+'.html', pdf);
 }
 function copyLineupText(){
   var txt=lineupExportText();
@@ -1940,6 +1943,20 @@ function shareHtml(html,name){
   if(inWebApp()) saveFile(blob,name).then(function(){if(!shared) showToast('In Drive gespeichert ('+name+'). Teilen von dort aus.');});
   else if(!shared) saveFile(blob,name);
 }
+// Als PDF: Seite in eigenem Fenster öffnen und den Druckdialog starten ("Als PDF speichern"); Rückfall: unsichtbarer Rahmen
+function printHtml(html,name){
+  var w=null; try{w=window.open('','_blank');}catch(e){w=null;}
+  if(w&&w.document){
+    w.document.open(); w.document.write(html); w.document.close();
+    setTimeout(function(){try{w.focus(); w.print();}catch(e){showToast('Drucken nicht möglich – bitte über Teilen speichern');}},500);
+    return;
+  }
+  var f=document.createElement('iframe'); f.style.cssText='position:fixed; right:0; bottom:0; width:0; height:0; border:0;';
+  document.body.appendChild(f); f.srcdoc=html;
+  setTimeout(function(){try{f.contentWindow.focus(); f.contentWindow.print();}catch(e){showToast('Drucken nicht möglich – bitte über Teilen speichern');}},700);
+  setTimeout(function(){if(f.parentNode) f.parentNode.removeChild(f);},120000);
+}
+function outHtml(html,name,pdf){if(pdf) printHtml(html,name); else shareHtml(html,name);}
 function goalTimelineHtml(s){
   var sc={Wir:0,Gegner:0};
   var rows=s.shots.filter(function(x){return x.outcome==='Tor';}).slice().sort(function(a,b){
@@ -1957,9 +1974,9 @@ function gameReportHtml(){
     '<section><h2>Torfolge</h2>'+goalTimelineHtml(state)+'</section>'+
     '<section><h2>Gesamtauswertung</h2>'+summaryHtml(null).replace(/<details /g,'<details open ')+'</section>';
 }
-function shareGameReport(){
+function shareGameReport(pdf){
   if(!hasGameData()){showToast('Noch keine Spieldaten'); return;}
-  shareHtml(reportPage('Spielbericht '+usName()+' – '+oppName(), gameReportHtml()), 'spielbericht_'+(gameDateOf(state)||'spiel')+'_'+fileSafe(oppName())+'.html');
+  outHtml(reportPage('Spielbericht '+usName()+' – '+oppName(), gameReportHtml()), 'spielbericht_'+(gameDateOf(state)||'spiel')+'_'+fileSafe(oppName())+'.html', pdf);
 }
 
 /* Saisonauswertung: Spielstände aus Drive (listExports) oder ausgewählten Dateien */
@@ -2106,12 +2123,12 @@ function renderSeason(){
   body.innerHTML=inc.length?seasonReportHtml(inc):'<p class="muted">Kein Spiel ausgewählt.</p>';
   act.style.display=inc.length?'flex':'none';
 }
-function shareSeasonReport(){
+function shareSeasonReport(pdf){
   var games=seasonGames(), ex=seasonExcl(), inc=games.filter(function(g){return ex.indexOf(g.key)===-1;});
   if(!inc.length){showToast('Kein Spiel ausgewählt'); return;}
   var y=seasonStartIso().slice(0,4), title='Saisonauswertung '+y+'/'+String(+y+1).slice(-2);
-  shareHtml(reportPage(title,'<section><h1 style="margin:0;">'+esc(title)+'</h1><p class="muted" style="margin:4px 0 0;">'+esc((inc[0].state.teamUs||usName())+' · '+inc.length+' Spiele bis '+fmtDate(inc[inc.length-1].date))+'</p></section><section>'+seasonReportHtml(inc)+'</section>'),
-    'saisonauswertung_'+y+'_stand_'+isoDate(Date.now())+'.html');
+  outHtml(reportPage(title,'<section><h1 style="margin:0;">'+esc(title)+'</h1><p class="muted" style="margin:4px 0 0;">'+esc((inc[0].state.teamUs||usName())+' · '+inc.length+' Spiele bis '+fmtDate(inc[inc.length-1].date))+'</p></section><section>'+seasonReportHtml(inc)+'</section>'),
+    'saisonauswertung_'+y+'_stand_'+isoDate(Date.now())+'.html', pdf);
 }
 
 /* ---------- Gemeinsam erfassen (mehrere Geräte, nur Web-App) ----------
