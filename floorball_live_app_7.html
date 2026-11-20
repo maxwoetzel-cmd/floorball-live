@@ -2416,6 +2416,9 @@ function displayNames(list){
 function findRosterMatch(p){
   if(p.id!=null){var byId=state.roster.find(function(r){return r.smId===p.id;}); if(byId) return byId;}
   var L=normName(p.last), F=normName(p.first).charAt(0);
+  // Ist der Nachname im Kader eindeutig, reicht er (der Vorname darf ein Spitzname sein, z. B. "Knaufti" statt "Andreas")
+  var sameLast=state.roster.filter(function(r){return r.last && normName(r.last)===L;});
+  if(L && sameLast.length===1) return sameLast[0];
   return state.roster.find(function(r){
     if(r.last) return normName(r.last)===L && (!F||!r.first||normName(r.first).charAt(0)===F);
     var n=normName(r.name); return n===L || (F!=='' && n===F+'. '+L);

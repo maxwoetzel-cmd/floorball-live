@@ -45,7 +45,8 @@ Verantwortlich: Max Woetzel (Head-Coach Herren).
   nach der letzten Änderung, nie mit leerem Stand). Im Apps-Script-Fenster bleibt `localStorage` nicht zuverlässig. Beim Öffnen
   fragt die App deshalb „In Drive liegt ein gesicherter Spielstand. Jetzt laden?“. Es gibt **einen** gemeinsamen Spielstand für alle Geräte.
 - **Stammkader** liegt in Drive (`kader.json`, je Spieler Nummer für Blau und Weiß, Position D/O, Torwart, Kapitän).
-  Er wird bei leerem Kader automatisch geladen. Trikotfarbe wird zu Beginn gewählt (Standard blau, nicht automatisch nach Heim/Auswärts).
+  Er wird bei leerem Kader automatisch geladen. Als Vorname stehen teils Spitznamen (Knaufti, Seb, Micha, Eili; Stand 20.11.2026, Jonathan Linn hat 65).
+  `findRosterMatch` gleicht deshalb bei eindeutigem Nachnamen nur über den Nachnamen ab (sonst Nachname + Initial). Alte Fassung: `kader_alt_2026-11-20.json` in „Exporte“. Trikotfarbe wird zu Beginn gewählt (Standard blau, nicht automatisch nach Heim/Auswärts).
 - **Ablauf in Phasen** (`state.phase`): `prep` (drei Schritte: 1 Spiel+Kader+Anwesenheit, 2 Aufstellung, 3 Spielstart),
   `play`, `break` (Pause mit Auswertung), `end` (Gesamtauswertung). „⌂ Startseite“ führt zu Schritt 1, „Zurück zum Spiel“
   setzt fort (`state.resume`). Ein Drittel endet **fest bei Minute 20** (`closeOpenIntervals`).
